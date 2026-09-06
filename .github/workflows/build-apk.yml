@@ -1,0 +1,77 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Copy .env.example to .env
+      run: |
+        cp .env.example .env
+        echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+        echo "GEMINI_API_KEY2=${{ secrets.GEMINI_API_KEY2 }}" >> .env
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Use Static Debug Keystore
+      run: cp keystore/debug.keystore debug.keystore
+
+    - name: Get Version Name
+      id: get_version
+      run: |
+        VERSION_NAME=$(grep "versionName =" app/build.gradle.kts | awk -F'"' '{print $2}')
+        echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+    - name: Build with Gradle (Debug APK)
+      run: |
+        ./gradlew assembleDebug
+        cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}.apk
+
+    - name: Verify APK Name
+      run: ls -R app/build/outputs/apk/
+
+    - name: Upload APK as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WurieAI-${{ steps.get_version.outputs.VERSION_NAME }}
+        path: app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}.apk
+
+    - name: Create Release
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "v${{ steps.get_version.outputs.VERSION_NAME }}-${{ github.run_number }}"
+        name: "WurieAI v${{ steps.get_version.outputs.VERSION_NAME }} (Build #${{ github.run_number }})"
+        body: |
+          ### Release Information
+          - **Version**: ${{ steps.get_version.outputs.VERSION_NAME }}
+          - **Build Number**: ${{ github.run_number }}
+          - **Commit**: ${{ github.sha }}
+          
+          This is an automated build from the main branch.
+        files: app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}.apk
+        make_latest: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

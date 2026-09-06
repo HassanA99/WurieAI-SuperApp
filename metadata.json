@@ -1,0 +1,6 @@
+{
+  "name": "WurieAI",
+  "description": "Africa's First Agentic Super App. Featuring Context-Aware AI Routing, Voice Assistance, Room Persistence for bookings, and Smart Market Search.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

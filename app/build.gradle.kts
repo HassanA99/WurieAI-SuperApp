@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.wurieai.wabcde"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.2-beta"
+    versionCode = 4
+    versionName = "1.4.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

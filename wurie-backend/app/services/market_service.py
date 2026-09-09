@@ -1,5 +1,8 @@
 from typing import Dict, Any
 
+from app.services.service_contracts import AgentResponse, ServiceDomain
+
+
 class MarketService:
     """Production-oriented market price service skeleton."""
 
@@ -34,3 +37,29 @@ class MarketService:
             "source": "demo-market-feed",
             "updatedAt": "2026-09-08T00:00:00Z",
         }
+
+    def lookup(self, query: str) -> AgentResponse:
+        """Return a canonical AgentResponse for market or product price requests."""
+        low = query.lower()
+        commodity = "rice"
+        if "fish" in low:
+            commodity = "fish"
+        elif "cement" in low:
+            commodity = "cement"
+
+        price = self.get_price(commodity, "Freetown")
+        material = price.get("commodity") or commodity
+        text = f"The current price of {material} is {price['price']} per {price['unit']} in {price['location']}."
+        return AgentResponse(
+            text=text,
+            action="NAVIGATE_TO",
+            target="Market Prices",
+            data={
+                "commodity": material,
+                "price": price.get("price"),
+                "location": price.get("location"),
+                "unit": price.get("unit"),
+                "source": price.get("source"),
+            },
+            service=ServiceDomain.MARKET,
+        )

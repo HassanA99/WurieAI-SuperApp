@@ -5,6 +5,10 @@ import com.example.BuildConfig
 class WurieApiRepository(
     private val apiService: WurieApiService
 ) {
+    suspend fun sendChatMessage(request: ChatRequest, token: String): ChatResponse {
+        return apiService.sendChatMessage(token, request)
+    }
+
     suspend fun registerProvider(request: ProviderRegistrationRequest, token: String): ProviderRegistrationResponse {
         return apiService.registerProvider(token, request)
     }

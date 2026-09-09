@@ -1,5 +1,9 @@
+import asyncio
 import unittest
 
+from fastapi import HTTPException
+
+from app.services.auth import verify_firebase_token
 from app.services.domain_router import DomainRouter
 
 
@@ -30,6 +34,12 @@ class DomainRouterContractTests(unittest.TestCase):
         self.assertEqual(response.action, "SHOW_WALLET")
         self.assertEqual(response.target, "Wallet")
         self.assertEqual(response.data["balance"], 150.0)
+
+    def test_missing_authorization_header_is_rejected(self):
+        with self.assertRaises(HTTPException) as context:
+            asyncio.run(verify_firebase_token(None))
+
+        self.assertEqual(context.exception.status_code, 401)
 
 
 if __name__ == "__main__":

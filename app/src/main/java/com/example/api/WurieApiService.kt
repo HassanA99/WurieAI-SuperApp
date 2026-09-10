@@ -91,6 +91,34 @@ data class ProfileSettingsUpdateRequest(
     val language: String? = null
 )
 
+data class CommentItem(
+    val id: String,
+    @Json(name = "user_id") val userId: String,
+    val username: String,
+    val body: String,
+    @Json(name = "created_at") val createdAt: String? = null
+)
+
+data class CommentCreateRequest(
+    val body: String,
+    val username: String = "Wurie User"
+)
+
+data class NotificationItem(
+    val id: String,
+    val title: String,
+    val body: String,
+    val read: Boolean = false,
+    val category: String = "general",
+    @Json(name = "created_at") val createdAt: String? = null
+)
+
+data class NotificationCreateRequest(
+    val title: String,
+    val body: String,
+    val category: String = "general"
+)
+
 interface WurieApiService {
     @POST("/api/v1/chat")
     suspend fun sendChatMessage(
@@ -142,6 +170,34 @@ interface WurieApiService {
         @Header("Authorization") token: String,
         @Body request: ProfileSettingsUpdateRequest
     ): ProfileSettings
+
+    @GET("/api/v1/social/comments")
+    suspend fun getComments(
+        @Header("Authorization") token: String
+    ): List<CommentItem>
+
+    @POST("/api/v1/social/comments")
+    suspend fun addComment(
+        @Header("Authorization") token: String,
+        @Body request: CommentCreateRequest
+    ): CommentItem
+
+    @GET("/api/v1/social/notifications")
+    suspend fun getNotifications(
+        @Header("Authorization") token: String
+    ): List<NotificationItem>
+
+    @POST("/api/v1/social/notifications")
+    suspend fun addNotification(
+        @Header("Authorization") token: String,
+        @Body request: NotificationCreateRequest
+    ): NotificationItem
+
+    @retrofit2.http.PATCH("/api/v1/social/notifications/{notificationId}/read")
+    suspend fun markNotificationRead(
+        @Header("Authorization") token: String,
+        @Path("notificationId") notificationId: String
+    ): NotificationItem
 
     @GET("/health")
     suspend fun healthCheck(): Map<String, String>

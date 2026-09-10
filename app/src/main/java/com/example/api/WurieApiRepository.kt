@@ -40,4 +40,24 @@ class WurieApiRepository(
     suspend fun updateProfileSettings(request: ProfileSettingsUpdateRequest, token: String): ProfileSettings {
         return apiService.updateProfileSettings(token, request)
     }
+
+    suspend fun getComments(token: String): List<CommentItem> {
+        return apiService.getComments(token)
+    }
+
+    suspend fun addComment(request: CommentCreateRequest, token: String): CommentItem {
+        return apiService.addComment(token, request)
+    }
+
+    suspend fun getNotifications(token: String): List<NotificationItem> {
+        return apiService.getNotifications(token)
+    }
+
+    suspend fun addNotification(request: NotificationCreateRequest, token: String): NotificationItem {
+        return apiService.addNotification(token, request)
+    }
+
+    suspend fun markNotificationRead(notificationId: String, token: String): NotificationItem {
+        return apiService.markNotificationRead(token, notificationId)
+    }
 }

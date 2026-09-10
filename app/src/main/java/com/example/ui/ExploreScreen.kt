@@ -36,11 +36,33 @@ data class ServiceItem(
     val color: Color
 )
 
+data class FeedComment(
+    val id: String,
+    val username: String,
+    val comment: String,
+    val timeAgo: String
+)
+
+data class NotificationEntry(
+    val id: String,
+    val title: String,
+    val body: String,
+    val timeAgo: String,
+    val unread: Boolean = true
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExploreScreen(onServiceClick: (String) -> Unit = {}) {
+fun ExploreScreen(
+    comments: List<FeedComment> = emptyList(),
+    notifications: List<NotificationEntry> = emptyList(),
+    onAddComment: (String) -> Unit = {},
+    onMarkNotificationRead: (String) -> Unit = {},
+    onServiceClick: (String) -> Unit = {}
+) {
     val strings = LocalAppStrings.current
     var showCommentsSheet by remember { mutableStateOf(false) }
+    var showNotificationsSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -74,10 +96,21 @@ fun ExploreScreen(onServiceClick: (String) -> Unit = {}) {
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(BrandPurpleLight),
+                        .background(BrandPurpleLight)
+                        .clickable { showNotificationsSheet = true },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Outlined.Notifications, contentDescription = "Notifications", tint = Color.White)
+                    if (notifications.any { it.unread }) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(Color.Red)
+                                .align(Alignment.TopEnd)
+                                .padding(2.dp)
+                        )
+                    }
                 }
             }
         }
@@ -128,7 +161,7 @@ fun ExploreScreen(onServiceClick: (String) -> Unit = {}) {
                 timeAgo = "1h ago",
                 content = "Great news for Freetown! The new transport regulations are helping reduce traffic in the CBD. Anyone noticed the difference during morning commute?",
                 initialLikes = 89,
-                initialComments = 15,
+                initialComments = comments.size,
                 onCommentClick = { showCommentsSheet = true }
             )
         }
@@ -151,7 +184,7 @@ fun ExploreScreen(onServiceClick: (String) -> Unit = {}) {
                 timeAgo = "5h ago",
                 content = "Finally finished my new portfolio website. I went with a clean, minimal design this time around. Check it out!",
                 initialLikes = 128,
-                initialComments = 34,
+                initialComments = comments.size + 2,
                 onCommentClick = { showCommentsSheet = true }
             )
         }
@@ -175,7 +208,29 @@ fun ExploreScreen(onServiceClick: (String) -> Unit = {}) {
                 sheetState = sheetState,
                 containerColor = BrandPurple
             ) {
-                CommentsSection()
+                CommentsSection(
+                    comments = comments,
+                    onAddComment = { text ->
+                        if (text.isNotBlank()) {
+                            onAddComment(text)
+                        }
+                    }
+                )
+            }
+        }
+
+        if (showNotificationsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showNotificationsSheet = false },
+                sheetState = sheetState,
+                containerColor = BrandPurple
+            ) {
+                NotificationSection(
+                    notifications = notifications,
+                    onMarkRead = { id ->
+                        onMarkNotificationRead(id)
+                    }
+                )
             }
         }
     }
@@ -308,7 +363,12 @@ fun SocialAction(
 }
 
 @Composable
-fun CommentsSection() {
+fun CommentsSection(
+    comments: List<FeedComment>,
+    onAddComment: (String) -> Unit
+) {
+    var draft by remember { mutableStateOf("") }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -322,19 +382,17 @@ fun CommentsSection() {
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(24.dp))
-        
-        CommentItem(username = "John Doe", comment = "This looks amazing! Thanks for sharing.", timeAgo = "1h ago")
-        Spacer(modifier = Modifier.height(16.dp))
-        CommentItem(username = "Alicia Keys", comment = "Can't wait to see more updates from you.", timeAgo = "45m ago")
-        Spacer(modifier = Modifier.height(16.dp))
-        CommentItem(username = "Bob Smith", comment = "Great insights. I completely agree.", timeAgo = "10m ago")
-        
+
+        comments.forEach { item ->
+            CommentItem(username = item.username, comment = item.comment, timeAgo = item.timeAgo)
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         Spacer(modifier = Modifier.weight(1f))
-        
-        // Comment Input
+
         OutlinedTextField(
-            value = "",
-            onValueChange = {},
+            value = draft,
+            onValueChange = { draft = it },
             placeholder = { Text("Write a comment...", color = Color.White.copy(alpha = 0.5f)) },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
@@ -345,7 +403,14 @@ fun CommentsSection() {
             ),
             shape = RoundedCornerShape(24.dp),
             trailingIcon = {
-                Icon(Icons.Filled.Send, contentDescription = "Send", tint = BrandPurpleAccent)
+                IconButton(
+                    onClick = {
+                        onAddComment(draft)
+                        draft = ""
+                    }
+                ) {
+                    Icon(Icons.Filled.Send, contentDescription = "Send", tint = BrandPurpleAccent)
+                }
             }
         )
     }
@@ -372,6 +437,54 @@ fun CommentItem(username: String, comment: String, timeAgo: String) {
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(comment, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+fun NotificationSection(
+    notifications: List<NotificationEntry>,
+    onMarkRead: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+    ) {
+        Text(
+            text = "Notifications",
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        notifications.forEach { item ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (item.unread) BrandPurpleLight else Color.White.copy(alpha = 0.04f))
+                    .clickable { onMarkRead(item.id) }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(if (item.unread) BotBubbleGreen else Color.White.copy(alpha = 0.3f))
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(item.body, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(item.timeAgo, color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }

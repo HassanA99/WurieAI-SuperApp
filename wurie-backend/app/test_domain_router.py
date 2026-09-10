@@ -6,7 +6,8 @@ from fastapi import HTTPException
 from app.services.auth import verify_firebase_token
 from app.services.domain_router import DomainRouter
 from app.services.profile_service import ProfileService
-from app.services.service_contracts import NotificationItem, ProfileSettings
+from app.services.service_contracts import CommentItem, NotificationItem, ProfileSettings
+from app.services.social_service import SocialService
 
 
 class DomainRouterContractTests(unittest.TestCase):
@@ -77,6 +78,31 @@ class DomainRouterContractTests(unittest.TestCase):
         self.assertTrue(profile.profile_completed)
         self.assertEqual(service.get_profile("other-user").uid, "other-user")
         self.assertNotEqual(service.get_profile("other-user").full_name, profile.full_name)
+
+    def test_social_comments_and_notifications_behave_as_scoped_feed_state(self):
+        social = SocialService()
+
+        created_comment = social.add_comment("user-123", "This is a great community post.", username="Aminata")
+        notification = social.add_notification(
+            "user-123",
+            "New provider match",
+            "A verified plumber is available near you.",
+            category="provider",
+        )
+
+        self.assertIsInstance(created_comment, CommentItem)
+        self.assertEqual(created_comment.username, "Aminata")
+        self.assertIn("community", created_comment.body.lower())
+
+        self.assertEqual(notification.title, "New provider match")
+        self.assertFalse(notification.read)
+        self.assertEqual(len(social.list_notifications("user-123")), 1)
+
+        read_notification = social.mark_notification_read("user-123", notification.id)
+        self.assertTrue(read_notification.read)
+
+        self.assertEqual(len(social.list_comments("user-123")), 1)
+        self.assertEqual(len(social.list_comments("other-user")), 0)
 
 
 if __name__ == "__main__":

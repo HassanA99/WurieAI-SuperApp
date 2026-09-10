@@ -86,6 +86,14 @@ class ProfileSettings(BaseModel):
     language: str = "en"
 
 
+class CommentItem(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    body: str
+    created_at: Optional[str] = None
+
+
 class NotificationItem(BaseModel):
     id: str
     title: str

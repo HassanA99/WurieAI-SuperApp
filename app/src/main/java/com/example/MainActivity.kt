@@ -281,7 +281,22 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                                 onVoiceModeOpen = onVoiceModeOpen
                             )
                         }
-                        NavItem.Explore -> com.example.ui.ExploreScreen(onServiceClick = { selectedService = it })
+                        NavItem.Explore -> {
+                            val exploreViewModel: ExploreViewModel = viewModel(factory = ExploreViewModel.Factory)
+                            val exploreUiState by exploreViewModel.uiState.collectAsState()
+
+                            LaunchedEffect(Unit) {
+                                exploreViewModel.loadSocialFeed()
+                            }
+
+                            com.example.ui.ExploreScreen(
+                                comments = exploreUiState.comments,
+                                notifications = exploreUiState.notifications,
+                                onAddComment = { text -> exploreViewModel.addComment(text) },
+                                onMarkNotificationRead = { id -> exploreViewModel.markNotificationRead(id) },
+                                onServiceClick = { selectedService = it }
+                            )
+                        }
                         NavItem.Profile -> {
                             val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
                             val profileUiState by profileViewModel.uiState.collectAsState()

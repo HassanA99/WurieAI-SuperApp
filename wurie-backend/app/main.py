@@ -5,11 +5,12 @@ import firebase_admin
 from firebase_admin import auth, credentials
 from app.agents.orchestrator import run_orchestrator
 from app.services.domain_router import DomainRouter
-from app.services.service_contracts import AgentResponse
+from app.services.service_contracts import AgentResponse, CommentItem, NotificationItem
 from app.services.service_contracts import ProfileSettings, UserProfile
 from app.services.auth import initialize_firebase_admin, verify_firebase_token
 from app.services.firestore_service_adapters import FirestoreServiceAdapters
 from app.services.profile_service import ProfileService
+from app.services.social_service import SocialService
 
 # Initialize FastAPI
 app = FastAPI(title="WurieAI Backend", version="1.0.0")
@@ -86,6 +87,18 @@ class ProfileSettingsUpdateRequest(BaseModel):
     offline_cache_enabled: bool | None = None
     language: str | None = None
 
+
+class CommentCreateRequest(BaseModel):
+    body: str
+    username: str = "Wurie User"
+
+
+class NotificationCreateRequest(BaseModel):
+    title: str
+    body: str
+    category: str = "general"
+
+
 async def firebase_dependency(authorization: str | None = Header(default=None)):
     """Keep the public FastAPI route using the shared token verification policy."""
     return await verify_firebase_token(authorization)
@@ -150,6 +163,32 @@ async def get_profile_settings(user=Depends(firebase_dependency)):
 @app.patch("/api/v1/profile/settings", response_model=ProfileSettings)
 async def update_profile_settings(request: ProfileSettingsUpdateRequest, user=Depends(firebase_dependency)):
     return profile_service.update_settings(user["uid"], request.model_dump(exclude_none=True))
+
+
+@app.get("/api/v1/social/comments", response_model=list[CommentItem])
+async def list_comments(user=Depends(firebase_dependency)):
+    return SocialService().list_comments(user["uid"])
+
+
+@app.post("/api/v1/social/comments", response_model=CommentItem)
+async def add_comment(request: CommentCreateRequest, user=Depends(firebase_dependency)):
+    return SocialService().add_comment(user["uid"], request.body, username=request.username)
+
+
+@app.get("/api/v1/social/notifications", response_model=list[NotificationItem])
+async def list_notifications(user=Depends(firebase_dependency)):
+    return SocialService().list_notifications(user["uid"])
+
+
+@app.post("/api/v1/social/notifications", response_model=NotificationItem)
+async def add_notification(request: NotificationCreateRequest, user=Depends(firebase_dependency)):
+    return SocialService().add_notification(user["uid"], request.title, request.body, category=request.category)
+
+
+@app.patch("/api/v1/social/notifications/{notification_id}/read", response_model=NotificationItem)
+async def mark_notification_read(notification_id: str, user=Depends(firebase_dependency)):
+    return SocialService().mark_notification_read(user["uid"], notification_id)
+
 
 class ProviderRegistrationRequest(BaseModel):
     name: str

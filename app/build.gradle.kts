@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.wurieai.wabcde"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.4.2"
+    versionCode = providers.gradleProperty("versionCode").orNull?.toIntOrNull() ?: 1
+    versionName = providers.gradleProperty("versionName").orNull ?: "0.1.0-dev"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

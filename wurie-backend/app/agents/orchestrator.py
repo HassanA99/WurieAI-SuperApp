@@ -5,6 +5,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from app.agents.market_agent import check_market_price
 from app.agents.artisan_agent import find_artisan
+from app.services.tracing import trace_agent_flow
 
 # Define the State for LangGraph
 class AgentState(TypedDict):
@@ -127,6 +128,7 @@ def build_graph():
 # Compile the graph once
 app_graph = build_graph()
 
+@trace_agent_flow
 def run_orchestrator(message: str, user_id: str) -> dict:
     """
     Executes the full LangGraph multi-agent flow.

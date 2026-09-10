@@ -3,6 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -17,22 +18,12 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up JDK 21
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
-        java-version: '21'
+        java-version: '17'
         distribution: 'temurin'
         cache: gradle
-
-    - name: Copy .env.example to .env
-      run: |
-        cp .env.example .env
-        if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
-          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
-        fi
-        if [ -n "${{ secrets.GEMINI_API_KEY2 }}" ]; then
-          echo "GEMINI_API_KEY2=${{ secrets.GEMINI_API_KEY2 }}" >> .env
-        fi
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -45,19 +36,25 @@ jobs:
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
         fi
 
-    - name: Get Version Name
+    - name: Resolve CI version
       id: get_version
       run: |
-        VERSION_NAME=$(grep "versionName =" app/build.gradle.kts | awk -F'"' '{print $2}')
-        if [ -z "$VERSION_NAME" ]; then
-          VERSION_NAME="1.4.2"
+        if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          VERSION_NAME="${GITHUB_REF_NAME#v}"
+        else
+          VERSION_NAME="0.1.${GITHUB_RUN_NUMBER}"
         fi
+        VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER))
+        echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_OUTPUT"
         echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
 
     - name: Build with Gradle (Debug APK)
       run: |
-        ./gradlew assembleDebug --no-daemon --stacktrace
-        cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}.apk
+        ./gradlew assembleDebug --no-daemon --stacktrace \
+          -PversionCode=${{ steps.get_version.outputs.VERSION_CODE }} \
+          -PversionName=${{ steps.get_version.outputs.VERSION_NAME }}
+        cp app/build/outputs/apk/debug/app-debug.apk \
+          app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}-${{ steps.get_version.outputs.VERSION_CODE }}.apk
 
     - name: Verify APK Name
       run: ls -la app/build/outputs/apk/debug/
@@ -66,10 +63,10 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: WurieAI-${{ steps.get_version.outputs.VERSION_NAME }}
-        path: app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}.apk
+        path: app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}-${{ steps.get_version.outputs.VERSION_CODE }}.apk
 
     - name: Create Release
-      if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+      if: (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')))
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "v${{ steps.get_version.outputs.VERSION_NAME }}-build${{ github.run_number }}"
@@ -81,7 +78,7 @@ jobs:
           - **Commit**: ${{ github.sha }}
           
           Android debug APK generated automatically by GitHub Actions CI/CD.
-        files: app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}.apk
+        files: app/build/outputs/apk/debug/WurieAI-debug-${{ steps.get_version.outputs.VERSION_NAME }}-${{ steps.get_version.outputs.VERSION_CODE }}.apk
         make_latest: true
         draft: false
         prerelease: false

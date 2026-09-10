@@ -5,4 +5,5 @@ firebase-admin==6.2.0
 langchain==0.0.339
 langchain-google-genai==0.0.4
 langgraph==0.0.15
+langsmith==0.0.87
 pydantic==2.5.2

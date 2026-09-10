@@ -11,6 +11,7 @@ from app.services.auth import initialize_firebase_admin, verify_firebase_token
 from app.services.firestore_service_adapters import FirestoreServiceAdapters
 from app.services.profile_service import ProfileService
 from app.services.social_service import SocialService
+from app.services.tracing import trace_chat_flow
 
 # Initialize FastAPI
 app = FastAPI(title="WurieAI Backend", version="1.0.0")
@@ -104,6 +105,7 @@ async def firebase_dependency(authorization: str | None = Header(default=None)):
     return await verify_firebase_token(authorization)
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
+@trace_chat_flow
 async def chat_endpoint(request: ChatRequest, user=Depends(firebase_dependency)):
     """
     Main endpoint for the Android app.

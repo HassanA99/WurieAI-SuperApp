@@ -5,7 +5,7 @@ import firebase_admin
 from firebase_admin import auth, credentials
 from app.agents.orchestrator import run_orchestrator
 from app.services.domain_router import DomainRouter
-from app.services.service_contracts import AgentResponse, CommentItem, NotificationItem
+from app.services.service_contracts import AgentResponse, CommentItem, LikeState, NotificationItem
 from app.services.service_contracts import ProfileSettings, UserProfile
 from app.services.auth import initialize_firebase_admin, verify_firebase_token
 from app.services.firestore_service_adapters import FirestoreServiceAdapters
@@ -190,11 +190,48 @@ async def mark_notification_read(notification_id: str, user=Depends(firebase_dep
     return SocialService().mark_notification_read(user["uid"], notification_id)
 
 
+@app.post("/api/v1/social/comments/{comment_id}/like", response_model=LikeState)
+async def toggle_comment_like(comment_id: str, user=Depends(firebase_dependency)):
+    return SocialService().toggle_like(user["uid"], comment_id)
+
+
 class ProviderRegistrationRequest(BaseModel):
     name: str
     trade: str
     location: str
     experience: str
+
+
+class ProviderApprovalRequest(BaseModel):
+    reason: str | None = None
+
+
+@app.get("/api/v1/providers/pending")
+async def get_pending_providers(user=Depends(firebase_dependency)):
+    """Return all pending verification requests for the admin dashboard."""
+    role = (user.get("claims") or {}).get("role")
+    if role and role not in {"admin", "staff", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return ProviderService().list_pending_providers()
+
+
+@app.post("/api/v1/providers/{provider_id}/approve")
+async def approve_provider(provider_id: str, request: ProviderApprovalRequest | None = None, user=Depends(firebase_dependency)):
+    """Approve a provider record for the admin dashboard."""
+    role = (user.get("claims") or {}).get("role")
+    if role and role not in {"admin", "staff", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return ProviderService().approve_provider(provider_id)
+
+
+@app.post("/api/v1/providers/{provider_id}/reject")
+async def reject_provider(provider_id: str, request: ProviderApprovalRequest | None = None, user=Depends(firebase_dependency)):
+    """Reject a provider record for the admin dashboard."""
+    role = (user.get("claims") or {}).get("role")
+    if role and role not in {"admin", "staff", "super_admin"}:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return ProviderService().reject_provider(provider_id, request.reason if request else None)
+
 
 @app.post("/api/v1/market/price", response_model=ChatResponse)
 async def market_price(request: MarketPriceRequest, user=Depends(firebase_dependency)):

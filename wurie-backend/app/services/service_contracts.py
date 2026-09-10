@@ -101,3 +101,9 @@ class NotificationItem(BaseModel):
     read: bool = False
     category: str = "general"
     created_at: Optional[str] = None
+
+
+class LikeState(BaseModel):
+    item_id: str
+    liked: bool = False
+    likes_count: int = 0

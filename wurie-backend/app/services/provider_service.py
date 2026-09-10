@@ -13,7 +13,7 @@ class ProviderService:
     """
 
     def __init__(self, datastore=None):
-        self.datastore = datastore
+        self.datastore = datastore if datastore is not None else {}
 
     def find(self, query: str) -> AgentResponse:
         """Return a structured provider recommendation.
@@ -64,17 +64,62 @@ class ProviderService:
 
     def register_provider(self, payload: dict) -> dict:
         """Persist a provider request and create a pending verification record."""
+        provider_id = payload.get("providerId", f"provider-{len(self.datastore) + 1:03d}")
+        provider_record = {
+            "providerId": provider_id,
+            "name": payload.get("name"),
+            "profession": payload.get("profession"),
+            "city": payload.get("city"),
+            "experience": payload.get("experience"),
+            "verificationStatus": "pending",
+        }
+        self.datastore[provider_record["providerId"]] = provider_record
         return {
             "status": "success",
             "message": "Provider registration submitted for verification.",
-            "provider": {
-                "name": payload.get("name"),
-                "profession": payload.get("profession"),
-                "city": payload.get("city"),
-                "experience": payload.get("experience"),
-                "verificationStatus": "pending",
-            },
+            "provider": provider_record,
         }
+
+    def list_pending_providers(self) -> list[dict]:
+        """Return all provider submissions still awaiting admin approval."""
+        return [
+            provider for provider in self.datastore.values()
+            if str(provider.get("verificationStatus", "")).lower() == "pending"
+        ]
+
+    def approve_provider(self, provider_id: str) -> dict:
+        """Approve a provider and return the updated verification state."""
+        provider_record = self.datastore.get(provider_id, {})
+        if not provider_record:
+            provider_record = {
+                "providerId": provider_id,
+                "name": "Unknown Provider",
+                "profession": "General",
+                "city": "Unknown",
+                "experience": "N/A",
+                "verificationStatus": "approved",
+            }
+        provider_record["verificationStatus"] = "approved"
+        self.datastore[provider_id] = provider_record
+        return provider_record
+
+    def reject_provider(self, provider_id: str, reason: str | None = None) -> dict:
+        """Reject a provider submission and keep the record for admin review."""
+        provider_record = self.datastore.get(provider_id, {})
+        if not provider_record:
+            provider_record = {
+                "providerId": provider_id,
+                "name": "Unknown Provider",
+                "profession": "General",
+                "city": "Unknown",
+                "experience": "N/A",
+                "verificationStatus": "rejected",
+            }
+        provider_record["verificationStatus"] = "rejected"
+        if reason:
+            provider_record["rejectionReason"] = reason
+        self.datastore[provider_id] = provider_record
+        return provider_record
 
 
 def find_provider(query: str) -> dict:

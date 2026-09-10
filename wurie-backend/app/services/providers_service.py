@@ -27,14 +27,35 @@ class ProviderService:
 
     def register_provider(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Persist a provider request and create a pending verification record."""
+        provider_record = {
+            "providerId": payload.get("providerId", "provider-001"),
+            "name": payload.get("name"),
+            "profession": payload.get("profession"),
+            "city": payload.get("city"),
+            "experience": payload.get("experience"),
+            "verificationStatus": "pending",
+        }
+        if self.datastore is not None:
+            self.datastore[provider_record["providerId"]] = provider_record
         return {
             "status": "success",
             "message": "Provider registration submitted for verification.",
-            "provider": {
-                "name": payload.get("name"),
-                "profession": payload.get("profession"),
-                "city": payload.get("city"),
-                "experience": payload.get("experience"),
-                "verificationStatus": "pending",
-            },
+            "provider": provider_record,
         }
+
+    def approve_provider(self, provider_id: str) -> Dict[str, Any]:
+        """Approve a provider and return the updated verification state."""
+        provider_record = (self.datastore or {}).get(provider_id, {})
+        if not provider_record:
+            provider_record = {
+                "providerId": provider_id,
+                "name": "Unknown Provider",
+                "profession": "General",
+                "city": "Unknown",
+                "experience": "N/A",
+                "verificationStatus": "approved",
+            }
+        provider_record["verificationStatus"] = "approved"
+        if self.datastore is not None:
+            self.datastore[provider_id] = provider_record
+        return provider_record

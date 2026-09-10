@@ -13,6 +13,18 @@ class WurieApiRepository(
         return apiService.registerProvider(token, request)
     }
 
+    suspend fun getPendingProviders(token: String): List<ProviderSummary> {
+        return apiService.getPendingProviders(token)
+    }
+
+    suspend fun approveProvider(providerId: String, token: String): ProviderSummary {
+        return apiService.approveProvider(token, providerId)
+    }
+
+    suspend fun rejectProvider(providerId: String, token: String): ProviderSummary {
+        return apiService.rejectProvider(token, providerId)
+    }
+
     suspend fun getMarketPrice(request: MarketPriceRequest, token: String): ChatResponse {
         return apiService.getMarketPrice(token, request)
     }

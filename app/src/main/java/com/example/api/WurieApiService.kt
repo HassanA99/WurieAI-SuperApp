@@ -119,6 +119,19 @@ data class NotificationCreateRequest(
     val category: String = "general"
 )
 
+data class ProviderSummary(
+    val providerId: String,
+    val name: String,
+    val profession: String,
+    val city: String,
+    val experience: String? = null,
+    val verificationStatus: String = "pending"
+)
+
+data class ProviderApprovalRequest(
+    val reason: String? = null
+)
+
 interface WurieApiService {
     @POST("/api/v1/chat")
     suspend fun sendChatMessage(
@@ -131,6 +144,25 @@ interface WurieApiService {
         @Header("Authorization") token: String,
         @Body request: ProviderRegistrationRequest
     ): ProviderRegistrationResponse
+
+    @GET("/api/v1/providers/pending")
+    suspend fun getPendingProviders(
+        @Header("Authorization") token: String
+    ): List<ProviderSummary>
+
+    @POST("/api/v1/providers/{providerId}/approve")
+    suspend fun approveProvider(
+        @Header("Authorization") token: String,
+        @Path("providerId") providerId: String,
+        @Body request: ProviderApprovalRequest = ProviderApprovalRequest()
+    ): ProviderSummary
+
+    @POST("/api/v1/providers/{providerId}/reject")
+    suspend fun rejectProvider(
+        @Header("Authorization") token: String,
+        @Path("providerId") providerId: String,
+        @Body request: ProviderApprovalRequest = ProviderApprovalRequest()
+    ): ProviderSummary
 
     @POST("/api/v1/market/price")
     suspend fun getMarketPrice(

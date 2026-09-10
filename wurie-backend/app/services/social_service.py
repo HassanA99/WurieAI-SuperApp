@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from app.services.service_contracts import CommentItem, NotificationItem
+from app.services.service_contracts import CommentItem, LikeState, NotificationItem
 
 
 _comments: dict[str, list[dict[str, Any]]] = {}
 _notifications: dict[str, list[dict[str, Any]]] = {}
+_likes: dict[str, set[str]] = {}
 
 
 class SocialService:
@@ -59,6 +60,20 @@ class SocialService:
                 item["read"] = True
                 return NotificationItem(**item)
         raise KeyError(f"Notification {notification_id} not found for uid {uid}")
+
+    def toggle_like(self, uid: str, item_id: str) -> LikeState:
+        liked_items = _likes.setdefault(uid, set())
+        liked = item_id not in liked_items
+        if liked:
+            liked_items.add(item_id)
+        else:
+            liked_items.discard(item_id)
+
+        likes_count = sum(1 for user_likes in _likes.values() if item_id in user_likes)
+        return LikeState(item_id=item_id, liked=liked, likes_count=likes_count)
+
+    def is_liked(self, uid: str, item_id: str) -> bool:
+        return item_id in _likes.get(uid, set())
 
     def mark_notification_read_by_id(self, uid: str, notification_id: str) -> NotificationItem:
         return self.mark_notification_read(uid, notification_id)

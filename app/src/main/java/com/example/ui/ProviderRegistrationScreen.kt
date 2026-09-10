@@ -29,7 +29,11 @@ import com.example.ui.theme.BrandPurple
 import com.example.ui.theme.BrandPurpleLight
 
 @Composable
-fun ProviderRegistrationScreen(onBack: () -> Unit, onSubmitSuccess: () -> Unit) {
+fun ProviderRegistrationScreen(
+    onBack: () -> Unit,
+    onSubmitSuccess: () -> Unit,
+    onSubmitRegistration: ((String, String, String, String) -> Unit)? = null
+) {
     var name by remember { mutableStateOf("") }
     var trade by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
@@ -136,7 +140,10 @@ fun ProviderRegistrationScreen(onBack: () -> Unit, onSubmitSuccess: () -> Unit) 
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
-                onClick = { showSuccessDialog = true },
+                onClick = {
+                    onSubmitRegistration?.invoke(name, trade, location, experience)
+                    showSuccessDialog = true
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

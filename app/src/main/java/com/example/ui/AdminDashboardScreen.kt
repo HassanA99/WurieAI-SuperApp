@@ -27,15 +27,15 @@ import com.example.ui.theme.BrandPurpleLight
 data class PendingProvider(val id: String, val name: String, val category: String, val status: String)
 
 @Composable
-fun AdminDashboardScreen(onBack: () -> Unit) {
-    var pendingProviders by remember { 
-        mutableStateOf(
-            listOf(
-                PendingProvider("1", "Abu Koroma", "Mechanic", "Pending"),
-                PendingProvider("2", "Fatu Turay", "Plumber", "Pending")
-            )
-        )
-    }
+fun AdminDashboardScreen(
+    onBack: () -> Unit,
+    pendingProviders: List<PendingProvider> = listOf(
+        PendingProvider("1", "Abu Koroma", "Mechanic", "Pending"),
+        PendingProvider("2", "Fatu Turay", "Plumber", "Pending")
+    ),
+    onApprove: (String) -> Unit = {},
+    onReject: (String) -> Unit = {}
+) {
 
     Column(
         modifier = Modifier
@@ -99,18 +99,14 @@ fun AdminDashboardScreen(onBack: () -> Unit) {
                     }
                     Row {
                         IconButton(
-                            onClick = { 
-                                pendingProviders = pendingProviders.filter { it.id != provider.id } 
-                            },
+                            onClick = { onReject(provider.id) },
                             modifier = Modifier.clip(CircleShape).background(Color(0xFFF44336).copy(alpha = 0.2f))
                         ) {
                             Icon(Icons.Filled.Close, contentDescription = "Reject", tint = Color(0xFFF44336))
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(
-                            onClick = { 
-                                pendingProviders = pendingProviders.filter { it.id != provider.id }
-                            },
+                            onClick = { onApprove(provider.id) },
                             modifier = Modifier.clip(CircleShape).background(BotBubbleGreen.copy(alpha = 0.2f))
                         ) {
                             Icon(Icons.Filled.Check, contentDescription = "Approve", tint = BotBubbleGreen)

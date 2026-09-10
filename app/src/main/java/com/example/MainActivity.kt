@@ -219,8 +219,38 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                         strings.bookArtisan -> com.example.ui.HireProviderScreen(onBack = { selectedService = null }, onTrackProvider = { selectedService = "ProviderTracking" }, initialCategory = selectedTradeForArtisan)
                         "ProviderTracking" -> com.example.ui.ProviderTrackingScreen(onBack = { selectedService = strings.bookArtisan })
                         "ProviderDashboard" -> com.example.ui.ProviderDashboardScreen(onBack = { selectedService = null })
-                        "ProviderRegistration" -> com.example.ui.ProviderRegistrationScreen(onBack = { selectedService = null }, onSubmitSuccess = { selectedService = "ProviderDashboard" })
-                        "AdminDashboard" -> com.example.ui.AdminDashboardScreen(onBack = { selectedService = null })
+                        "ProviderRegistration" -> {
+                            val serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
+                            com.example.ui.ProviderRegistrationScreen(
+                                onBack = { selectedService = null },
+                                onSubmitSuccess = { selectedService = "ProviderDashboard" },
+                                onSubmitRegistration = { name, trade, location, experience ->
+                                    serviceViewModel.registerProvider(name, trade, location, experience)
+                                }
+                            )
+                        }
+                        "AdminDashboard" -> {
+                            val serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
+                            val pendingProviders by serviceViewModel.pendingProviders.collectAsState()
+
+                            LaunchedEffect(Unit) {
+                                serviceViewModel.loadPendingProviders()
+                            }
+
+                            com.example.ui.AdminDashboardScreen(
+                                onBack = { selectedService = null },
+                                pendingProviders = pendingProviders.map { provider ->
+                                    com.example.ui.PendingProvider(
+                                        id = provider.providerId,
+                                        name = provider.name,
+                                        category = provider.profession,
+                                        status = provider.verificationStatus.replaceFirstChar { it.titlecase() }
+                                    )
+                                },
+                                onApprove = { providerId -> serviceViewModel.approveProvider(providerId) },
+                                onReject = { providerId -> serviceViewModel.rejectProvider(providerId) }
+                            )
+                        }
                         strings.rideKeke -> com.example.ui.RideBookingScreen(onBack = { selectedService = null })
                         else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text("$selectedService (Coming Soon)", color = Color.White)

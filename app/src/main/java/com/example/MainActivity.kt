@@ -31,6 +31,8 @@ import androidx.compose.foundation.lazy.items
 import coil.compose.AsyncImage
 import com.example.ui.theme.*
 import com.example.viewmodel.ChatViewModel
+import com.example.viewmodel.ExploreViewModel
+import com.example.viewmodel.ServiceViewModel
 
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable

@@ -24,4 +24,20 @@ class WurieApiRepository(
     suspend fun getWalletBalance(token: String): WalletBalanceResponse {
         return apiService.getWalletBalance(token)
     }
+
+    suspend fun getProfile(token: String): UserProfile {
+        return apiService.getProfile(token)
+    }
+
+    suspend fun updateProfile(request: ProfileUpdateRequest, token: String): UserProfile {
+        return apiService.updateProfile(token, request)
+    }
+
+    suspend fun getProfileSettings(token: String): ProfileSettings {
+        return apiService.getProfileSettings(token)
+    }
+
+    suspend fun updateProfileSettings(request: ProfileSettingsUpdateRequest, token: String): ProfileSettings {
+        return apiService.updateProfileSettings(token, request)
+    }
 }

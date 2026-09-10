@@ -5,6 +5,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
+import com.squareup.moshi.Json
 
 data class ChatRequest(
     val message: String,
@@ -58,6 +59,38 @@ data class WalletBalanceResponse(
     val transactions: List<Map<String, Any>> = emptyList()
 )
 
+data class UserProfile(
+    val uid: String,
+    @Json(name = "full_name") val fullName: String,
+    val email: String,
+    val phone: String? = null,
+    val city: String? = null,
+    val role: String = "customer",
+    @Json(name = "profile_completed") val profileCompleted: Boolean = false
+)
+
+data class ProfileUpdateRequest(
+    @Json(name = "full_name") val fullName: String? = null,
+    val phone: String? = null,
+    val city: String? = null
+)
+
+data class ProfileSettings(
+    @Json(name = "notifications_enabled") val notificationsEnabled: Boolean = true,
+    @Json(name = "biometric_enabled") val biometricEnabled: Boolean = false,
+    @Json(name = "push_enabled") val pushEnabled: Boolean = true,
+    @Json(name = "offline_cache_enabled") val offlineCacheEnabled: Boolean = true,
+    val language: String = "en"
+)
+
+data class ProfileSettingsUpdateRequest(
+    @Json(name = "notifications_enabled") val notificationsEnabled: Boolean? = null,
+    @Json(name = "biometric_enabled") val biometricEnabled: Boolean? = null,
+    @Json(name = "push_enabled") val pushEnabled: Boolean? = null,
+    @Json(name = "offline_cache_enabled") val offlineCacheEnabled: Boolean? = null,
+    val language: String? = null
+)
+
 interface WurieApiService {
     @POST("/api/v1/chat")
     suspend fun sendChatMessage(
@@ -87,6 +120,28 @@ interface WurieApiService {
     suspend fun getWalletBalance(
         @Header("Authorization") token: String
     ): WalletBalanceResponse
+
+    @GET("/api/v1/profile")
+    suspend fun getProfile(
+        @Header("Authorization") token: String
+    ): UserProfile
+
+    @retrofit2.http.PATCH("/api/v1/profile")
+    suspend fun updateProfile(
+        @Header("Authorization") token: String,
+        @Body request: ProfileUpdateRequest
+    ): UserProfile
+
+    @GET("/api/v1/profile/settings")
+    suspend fun getProfileSettings(
+        @Header("Authorization") token: String
+    ): ProfileSettings
+
+    @retrofit2.http.PATCH("/api/v1/profile/settings")
+    suspend fun updateProfileSettings(
+        @Header("Authorization") token: String,
+        @Body request: ProfileSettingsUpdateRequest
+    ): ProfileSettings
 
     @GET("/health")
     suspend fun healthCheck(): Map<String, String>

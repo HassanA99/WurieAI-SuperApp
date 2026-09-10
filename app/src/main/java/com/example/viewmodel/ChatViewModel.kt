@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.api.ChatRequest
 import com.example.api.ChatResponse
+import com.example.api.AuthTokenProvider
 import com.example.api.RetrofitClient
 import com.example.api.WurieApiRepository
 import com.example.data.local.ActivityLogEntity
@@ -27,7 +28,8 @@ import java.util.UUID
 class ChatViewModel(
     private val repository: ChatRepository,
     private val activityRepository: ActivityRepository,
-    private val apiRepository: WurieApiRepository? = null
+    private val apiRepository: WurieApiRepository? = null,
+    private val authTokenProvider: AuthTokenProvider = AuthTokenProvider()
 ) : ViewModel() {
 
     val messages: StateFlow<List<ChatMessageEntity>> = repository.allMessages
@@ -53,7 +55,7 @@ class ChatViewModel(
             repository.insertMessage(loadingMsg)
 
             try {
-                val backendToken = "Bearer local-dev-token"
+                val backendToken = authTokenProvider.bearerToken()
                 val response = apiRepository?.sendChatMessage(
                     ChatRequest(message = text, location = null),
                     backendToken

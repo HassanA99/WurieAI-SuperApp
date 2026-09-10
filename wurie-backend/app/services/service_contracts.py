@@ -76,3 +76,20 @@ class BookingRequest(BaseModel):
     location: Optional[str] = None
     scheduled_time: Optional[str] = None
     notes: Optional[str] = None
+
+
+class ProfileSettings(BaseModel):
+    notifications_enabled: bool = True
+    biometric_enabled: bool = False
+    push_enabled: bool = True
+    offline_cache_enabled: bool = True
+    language: str = "en"
+
+
+class NotificationItem(BaseModel):
+    id: str
+    title: str
+    body: str
+    read: bool = False
+    category: str = "general"
+    created_at: Optional[str] = None

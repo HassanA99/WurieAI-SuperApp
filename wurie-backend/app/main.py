@@ -6,13 +6,28 @@ from firebase_admin import auth, credentials
 from app.agents.orchestrator import run_orchestrator
 from app.services.domain_router import DomainRouter
 from app.services.service_contracts import AgentResponse
-from app.services.auth import verify_firebase_token
+from app.services.service_contracts import ProfileSettings, UserProfile
+from app.services.auth import initialize_firebase_admin, verify_firebase_token
 from app.services.firestore_service_adapters import FirestoreServiceAdapters
+from app.services.profile_service import ProfileService
 
 # Initialize FastAPI
 app = FastAPI(title="WurieAI Backend", version="1.0.0")
 router = DomainRouter()
 adapters = FirestoreServiceAdapters()
+profile_service = ProfileService()
+
+
+def startup() -> None:
+    """Initialize Firebase on backend startup when project credentials are available."""
+    try:
+        initialize_firebase_admin()
+    except Exception:
+        # Keep the backend bootable in local/demo mode when Firebase is not configured yet.
+        pass
+
+
+startup()
 
 # Initialize Firebase Admin (Uncomment and configure with your service account key in production)
 # cred = credentials.Certificate("path/to/serviceAccountKey.json")
@@ -57,6 +72,20 @@ class BookingResponse(BaseModel):
     status: str
     message: str
 
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: str | None = None
+    phone: str | None = None
+    city: str | None = None
+
+
+class ProfileSettingsUpdateRequest(BaseModel):
+    notifications_enabled: bool | None = None
+    biometric_enabled: bool | None = None
+    push_enabled: bool | None = None
+    offline_cache_enabled: bool | None = None
+    language: str | None = None
+
 async def firebase_dependency(authorization: str | None = Header(default=None)):
     """Keep the public FastAPI route using the shared token verification policy."""
     return await verify_firebase_token(authorization)
@@ -95,6 +124,32 @@ async def chat_endpoint(request: ChatRequest, user=Depends(firebase_dependency))
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/api/v1/profile", response_model=UserProfile)
+async def get_profile(user=Depends(firebase_dependency)):
+    """Return the profile belonging to the verified Firebase user."""
+    return profile_service.get_profile(user["uid"], user.get("claims", {}).get("email", ""))
+
+
+@app.patch("/api/v1/profile", response_model=UserProfile)
+async def update_profile(request: ProfileUpdateRequest, user=Depends(firebase_dependency)):
+    """Update only the profile owned by the verified Firebase user."""
+    return profile_service.update_profile(
+        user["uid"],
+        request.model_dump(exclude_none=True),
+        user.get("claims", {}).get("email", ""),
+    )
+
+
+@app.get("/api/v1/profile/settings", response_model=ProfileSettings)
+async def get_profile_settings(user=Depends(firebase_dependency)):
+    return profile_service.get_settings(user["uid"])
+
+
+@app.patch("/api/v1/profile/settings", response_model=ProfileSettings)
+async def update_profile_settings(request: ProfileSettingsUpdateRequest, user=Depends(firebase_dependency)):
+    return profile_service.update_settings(user["uid"], request.model_dump(exclude_none=True))
 
 class ProviderRegistrationRequest(BaseModel):
     name: str

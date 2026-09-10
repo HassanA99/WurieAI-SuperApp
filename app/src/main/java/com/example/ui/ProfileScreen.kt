@@ -649,11 +649,11 @@ fun ProfileScreen(
                                 onCheckedChange = {
                                     biometricEnabled = it
                                     onSettingsSave(
-                                        notificationsEnabled = pushNotificationsEnabled,
-                                        biometricEnabled = it,
-                                        pushEnabled = twoFactorEnabled,
-                                        offlineCacheEnabled = offlineCacheEnabled,
-                                        language = settings?.language ?: "en"
+                                        pushNotificationsEnabled,
+                                        it,
+                                        twoFactorEnabled,
+                                        offlineCacheEnabled,
+                                        settings?.language ?: "en"
                                     )
                                 },
                                 colors = SwitchDefaults.colors(checkedThumbColor = BotBubbleGreen, checkedTrackColor = BotBubbleGreen.copy(alpha = 0.3f))
@@ -678,11 +678,11 @@ fun ProfileScreen(
                                 onCheckedChange = {
                                     twoFactorEnabled = it
                                     onSettingsSave(
-                                        notificationsEnabled = pushNotificationsEnabled,
-                                        biometricEnabled = biometricEnabled,
-                                        pushEnabled = it,
-                                        offlineCacheEnabled = offlineCacheEnabled,
-                                        language = settings?.language ?: "en"
+                                        pushNotificationsEnabled,
+                                        biometricEnabled,
+                                        it,
+                                        offlineCacheEnabled,
+                                        settings?.language ?: "en"
                                     )
                                 },
                                 colors = SwitchDefaults.colors(checkedThumbColor = BotBubbleGreen, checkedTrackColor = BotBubbleGreen.copy(alpha = 0.3f))
@@ -707,11 +707,11 @@ fun ProfileScreen(
                                 onCheckedChange = {
                                     offlineCacheEnabled = it
                                     onSettingsSave(
-                                        notificationsEnabled = pushNotificationsEnabled,
-                                        biometricEnabled = biometricEnabled,
-                                        pushEnabled = twoFactorEnabled,
-                                        offlineCacheEnabled = it,
-                                        language = settings?.language ?: "en"
+                                        pushNotificationsEnabled,
+                                        biometricEnabled,
+                                        twoFactorEnabled,
+                                        it,
+                                        settings?.language ?: "en"
                                     )
                                 },
                                 colors = SwitchDefaults.colors(checkedThumbColor = BotBubbleGreen, checkedTrackColor = BotBubbleGreen.copy(alpha = 0.3f))
@@ -1006,7 +1006,7 @@ fun ProfileScreen(
                     OutlinedTextField(
                         value = contactRelation,
                         onValueChange = { contactRelation = it },
-                        placeholder = { Text("Relationship (e.g., Sister, Colleague)", color = Color.White.copy(alpha = 0.5f)) },
+                        placeholder = { Text("Relation (e.g., Brother, Sister)", color = Color.White.copy(alpha = 0.5f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
@@ -1018,7 +1018,7 @@ fun ProfileScreen(
                     OutlinedTextField(
                         value = contactPhone,
                         onValueChange = { contactPhone = it },
-                        placeholder = { Text("Phone Number", color = Color.White.copy(alpha = 0.5f)) },
+                        placeholder = { Text("Phone (+232...)", color = Color.White.copy(alpha = 0.5f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
@@ -1032,20 +1032,20 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        if (contactName.isNotBlank() && contactPhone.isNotBlank()) {
+                        if (contactName.isNotBlank() && contactRelation.isNotBlank() && contactPhone.isNotBlank()) {
                             emergencyContacts = emergencyContacts + EmergencyContact(
                                 id = java.util.UUID.randomUUID().toString(),
                                 name = contactName,
-                                relation = contactRelation.ifBlank { "Contact" },
+                                relation = contactRelation,
                                 phone = contactPhone
                             )
                             showAddContactDialog = false
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BotBubbleGreen),
-                    enabled = contactName.isNotBlank() && contactPhone.length > 5
+                    enabled = contactName.isNotBlank() && contactRelation.isNotBlank() && contactPhone.isNotBlank()
                 ) {
-                    Text("Save Contact", color = BrandPurple, fontWeight = FontWeight.Bold)
+                    Text("Add Contact", color = BrandPurple, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1059,39 +1059,30 @@ fun ProfileScreen(
 
     // 5. Link Mobile Money Dialog
     if (showLinkMomoDialog) {
-        var selectedProvider by remember { mutableStateOf("Orange Money") }
-        var momoNumber by remember { mutableStateOf("+232 ") }
+        var momoProvider by remember { mutableStateOf("") }
+        var momoPhone by remember { mutableStateOf("+232 ") }
 
         AlertDialog(
             onDismissRequest = { showLinkMomoDialog = false },
-            title = { Text("Link Mobile Money", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Link Mobile Money Account", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("Select Mobile Network Operator:", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Orange Money", "Africell Afrimoney").forEach { prov ->
-                            val isSel = selectedProvider == prov
-                            Surface(
-                                onClick = { selectedProvider = prov },
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSel) BotBubbleGreen else Color.White.copy(alpha = 0.1f),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    prov,
-                                    color = if (isSel) BrandPurple else Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            }
-                        }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
-                        value = momoNumber,
-                        onValueChange = { momoNumber = it },
-                        placeholder = { Text("Account Phone Number", color = Color.White.copy(alpha = 0.5f)) },
+                        value = momoProvider,
+                        onValueChange = { momoProvider = it },
+                        placeholder = { Text("Provider (e.g., Orange Money, Afrimoney)", color = Color.White.copy(alpha = 0.5f)) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = BotBubbleGreen,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.3f)
+                        ),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = momoPhone,
+                        onValueChange = { momoPhone = it },
+                        placeholder = { Text("Mobile Money Number", color = Color.White.copy(alpha = 0.5f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
@@ -1105,18 +1096,18 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        if (momoNumber.length > 6) {
+                        if (momoProvider.isNotBlank() && momoPhone.isNotBlank()) {
                             momoAccounts = momoAccounts + MobileMoneyAccount(
                                 id = java.util.UUID.randomUUID().toString(),
-                                provider = selectedProvider,
-                                phone = momoNumber,
+                                provider = momoProvider,
+                                phone = momoPhone,
                                 isPrimary = false
                             )
                             showLinkMomoDialog = false
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BotBubbleGreen),
-                    enabled = momoNumber.length > 6
+                    enabled = momoProvider.isNotBlank() && momoPhone.isNotBlank()
                 ) {
                     Text("Link Account", color = BrandPurple, fontWeight = FontWeight.Bold)
                 }
@@ -1130,108 +1121,21 @@ fun ProfileScreen(
         )
     }
 
-    // 6. Booking Receipt Modal
-    selectedBookingForReceipt?.let { record ->
-        AlertDialog(
-            onDismissRequest = { selectedBookingForReceipt = null },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.AutoMirrored.Outlined.ReceiptLong, contentDescription = null, tint = BotBubbleGreen)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Booking Receipt", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Reference: ${record.id}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Service:", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-                        Text(record.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Provider:", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-                        Text(record.providerName, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Status:", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-                        Text(record.status, color = BotBubbleGreen, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Date & Time:", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-                        Text(record.dateTime, color = Color.White, fontSize = 14.sp)
-                    }
-                    if (record.destination != null) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Location:", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-                            Text(record.destination, color = Color.White, fontSize = 12.sp, modifier = Modifier.fillMaxWidth(0.6f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
-                        }
-                    }
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Total Amount Paid:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(record.fare, color = BotBubbleGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    }
-                    Text("Protected by Wurie Smart Escrow • Funds securely held until completion", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { selectedBookingForReceipt = null },
-                    colors = ButtonDefaults.buttonColors(containerColor = BotBubbleGreen)
-                ) {
-                    Text("Close", color = BrandPurple, fontWeight = FontWeight.Bold)
-                }
-            },
-            containerColor = BrandPurpleDark
-        )
-    }
-
-    // 7. Safety Alert Test Toast Dialog
-    if (showSafetyTestToast) {
-        AlertDialog(
-            onDismissRequest = { showSafetyTestToast = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BotBubbleGreen)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Safety Protocol Tested", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Text(
-                    "Simulated SMS and GPS coordinate broadcast dispatched to your 2 registered emergency contacts:\n\n• Momodu Bah (+232 76 991 223)\n• Aminata Sesay (+232 88 123 456)\n\nIn a real emergency, tapping SOS during any ride shares your live transit route instantly.",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showSafetyTestToast = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = BotBubbleGreen)
-                ) {
-                    Text("Dismiss", color = BrandPurple, fontWeight = FontWeight.Bold)
-                }
-            },
-            containerColor = BrandPurpleDark
-        )
-    }
-
-    // 8. Logout Confirmation Dialog
+    // 6. Logout Confirmation Dialog
     if (showLogoutConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutConfirmDialog = false },
-            title = { Text("Log Out of WurieAI?", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("You will need to sign in again to access your wallet, bookings, and verified identity.", color = Color.White.copy(alpha = 0.8f)) },
+            title = { Text("Confirm Logout", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to logout?", color = Color.White.copy(alpha = 0.8f)) },
             confirmButton = {
                 Button(
                     onClick = {
-                        showLogoutConfirmDialog = false
                         onLogout()
+                        showLogoutConfirmDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
                 ) {
-                    Text("Log Out", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Logout", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1247,29 +1151,34 @@ fun ProfileScreen(
 @Composable
 fun ProfileStat(count: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(count, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+        Text(count, color = BotBubbleGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(label, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
     }
 }
 
 @Composable
-fun ProfileOptionRow(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
+fun ProfileOptionRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(20.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            if (subtitle != null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = BotBubbleGreen, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 Text(subtitle, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
             }
         }
-        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.3f))
+        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = BotBubbleGreen, modifier = Modifier.size(18.dp))
     }
 }

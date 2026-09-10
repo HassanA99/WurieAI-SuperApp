@@ -43,6 +43,7 @@ import com.example.ui.util.LocalAppStrings
 
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.AuthState
+import com.example.viewmodel.ProfileViewModel
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -281,12 +282,35 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                             )
                         }
                         NavItem.Explore -> com.example.ui.ExploreScreen(onServiceClick = { selectedService = it })
-                        NavItem.Profile -> com.example.ui.ProfileScreen(onProviderPortal = { selectedService = "ProviderRegistration" }, onAdminPortal = { selectedService = "AdminDashboard" }, 
-                            currentLanguage = currentLanguage,
-                            onLanguageChange = { currentLanguage = it },
-                            
-                            onLogout = { /* TODO: Implement actual logout */ }
-                        )
+                        NavItem.Profile -> {
+                            val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
+                            val profileUiState by profileViewModel.uiState.collectAsState()
+
+                            LaunchedEffect(Unit) {
+                                profileViewModel.loadProfile()
+                            }
+
+                            com.example.ui.ProfileScreen(
+                                onProviderPortal = { selectedService = "ProviderRegistration" },
+                                onAdminPortal = { selectedService = "AdminDashboard" },
+                                currentLanguage = currentLanguage,
+                                onLanguageChange = { currentLanguage = it },
+                                profileUiState = profileUiState,
+                                onProfileSave = { name, phone, city ->
+                                    profileViewModel.saveProfile(name, phone, city)
+                                },
+                                onSettingsSave = { notifications, biometric, push, offline, language ->
+                                    profileViewModel.saveSettings(
+                                        notificationsEnabled = notifications,
+                                        biometricEnabled = biometric,
+                                        pushEnabled = push,
+                                        offlineCacheEnabled = offline,
+                                        language = language
+                                    )
+                                },
+                                onLogout = { authViewModel.signOut() }
+                            )
+                        }
                         else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             val routeName = items.firstOrNull { it.first == currentRoute }?.second ?: ""
                             Text("$routeName (Coming Soon)", color = Color.White)

@@ -26,9 +26,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.api.ProfileSettings
+import com.example.api.UserProfile
 import com.example.ui.theme.*
 import com.example.ui.util.AppLanguage
 import com.example.ui.util.LocalAppStrings
+import com.example.viewmodel.ProfileUiState
 
 data class BookingRecord(
     val id: String,
@@ -69,17 +72,22 @@ fun ProfileScreen(
     onLanguageChange: (AppLanguage) -> Unit,
     onProviderPortal: () -> Unit = {},
     onAdminPortal: () -> Unit = {},
+    profileUiState: ProfileUiState = ProfileUiState(),
+    onProfileSave: (String, String?, String?) -> Unit = { _, _, _ -> },
+    onSettingsSave: (Boolean?, Boolean?, Boolean?, Boolean?, String?) -> Unit = { _, _, _, _, _ -> },
     onLogout: () -> Unit
 ) {
     val strings = LocalAppStrings.current
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("wurie_user_session", Context.MODE_PRIVATE) }
 
-    // User details state
-    var userName by remember { mutableStateOf(prefs.getString("user_name", "Foday Kamara") ?: "Foday Kamara") }
-    var userEmail by remember { mutableStateOf(prefs.getString("user_email", "foday.k@wurie.ai") ?: "foday.k@wurie.ai") }
-    var userPhone by remember { mutableStateOf(prefs.getString("user_phone", "+232 78 450 892") ?: "+232 78 450 892") }
-    var userCity by remember { mutableStateOf(prefs.getString("user_city", "Freetown, Sierra Leone") ?: "Freetown, Sierra Leone") }
+    val profile: UserProfile? = profileUiState.profile
+    val settings: ProfileSettings? = profileUiState.settings
+
+    val userName = profile?.fullName ?: prefs.getString("user_name", "Foday Kamara") ?: "Foday Kamara"
+    val userEmail = profile?.email ?: prefs.getString("user_email", "foday.k@wurie.ai") ?: "foday.k@wurie.ai"
+    val userPhone = profile?.phone ?: prefs.getString("user_phone", "+232 78 450 892") ?: "+232 78 450 892"
+    val userCity = profile?.city ?: prefs.getString("user_city", "Freetown, Sierra Leone") ?: "Freetown, Sierra Leone"
 
     // Dialog states
     var showEditProfileDialog by remember { mutableStateOf(false) }
@@ -92,10 +100,17 @@ fun ProfileScreen(
     var showSafetyTestToast by remember { mutableStateOf(false) }
 
     // Security & feature toggles
-    var biometricEnabled by remember { mutableStateOf(true) }
-    var twoFactorEnabled by remember { mutableStateOf(true) }
-    var offlineCacheEnabled by remember { mutableStateOf(true) }
-    var pushNotificationsEnabled by remember { mutableStateOf(true) }
+    var biometricEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.biometricEnabled ?: true) }
+    var twoFactorEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.pushEnabled ?: true) }
+    var offlineCacheEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.offlineCacheEnabled ?: true) }
+    var pushNotificationsEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.notificationsEnabled ?: true) }
+
+    LaunchedEffect(settings) {
+        biometricEnabled = settings?.biometricEnabled ?: true
+        twoFactorEnabled = settings?.pushEnabled ?: true
+        offlineCacheEnabled = settings?.offlineCacheEnabled ?: true
+        pushNotificationsEnabled = settings?.notificationsEnabled ?: true
+    }
 
     // Interactive lists
     var bookings by remember {
@@ -631,7 +646,16 @@ fun ProfileScreen(
                             }
                             Switch(
                                 checked = biometricEnabled,
-                                onCheckedChange = { biometricEnabled = it },
+                                onCheckedChange = {
+                                    biometricEnabled = it
+                                    onSettingsSave(
+                                        notificationsEnabled = pushNotificationsEnabled,
+                                        biometricEnabled = it,
+                                        pushEnabled = twoFactorEnabled,
+                                        offlineCacheEnabled = offlineCacheEnabled,
+                                        language = settings?.language ?: "en"
+                                    )
+                                },
                                 colors = SwitchDefaults.colors(checkedThumbColor = BotBubbleGreen, checkedTrackColor = BotBubbleGreen.copy(alpha = 0.3f))
                             )
                         }
@@ -651,7 +675,16 @@ fun ProfileScreen(
                             }
                             Switch(
                                 checked = twoFactorEnabled,
-                                onCheckedChange = { twoFactorEnabled = it },
+                                onCheckedChange = {
+                                    twoFactorEnabled = it
+                                    onSettingsSave(
+                                        notificationsEnabled = pushNotificationsEnabled,
+                                        biometricEnabled = biometricEnabled,
+                                        pushEnabled = it,
+                                        offlineCacheEnabled = offlineCacheEnabled,
+                                        language = settings?.language ?: "en"
+                                    )
+                                },
                                 colors = SwitchDefaults.colors(checkedThumbColor = BotBubbleGreen, checkedTrackColor = BotBubbleGreen.copy(alpha = 0.3f))
                             )
                         }
@@ -671,7 +704,16 @@ fun ProfileScreen(
                             }
                             Switch(
                                 checked = offlineCacheEnabled,
-                                onCheckedChange = { offlineCacheEnabled = it },
+                                onCheckedChange = {
+                                    offlineCacheEnabled = it
+                                    onSettingsSave(
+                                        notificationsEnabled = pushNotificationsEnabled,
+                                        biometricEnabled = biometricEnabled,
+                                        pushEnabled = twoFactorEnabled,
+                                        offlineCacheEnabled = it,
+                                        language = settings?.language ?: "en"
+                                    )
+                                },
                                 colors = SwitchDefaults.colors(checkedThumbColor = BotBubbleGreen, checkedTrackColor = BotBubbleGreen.copy(alpha = 0.3f))
                             )
                         }
@@ -819,14 +861,12 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        userName = tempName
-                        userPhone = tempPhone
-                        userCity = tempCity
                         prefs.edit()
                             .putString("user_name", tempName)
                             .putString("user_phone", tempPhone)
                             .putString("user_city", tempCity)
                             .apply()
+                        onProfileSave(tempName, tempPhone, tempCity)
                         showEditProfileDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BotBubbleGreen)

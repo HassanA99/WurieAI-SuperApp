@@ -48,7 +48,16 @@ class ProviderService:
         )
 
     def search_providers(self, city: str = "", profession: str = "") -> list[dict]:
-        """Return a list of provider records. Use Firestore or a backend repository in production."""
+        """Return approved providers matching the optional city and profession."""
+        stored = [
+            provider for provider in self.datastore.values()
+            if str(provider.get("verificationStatus", "")).lower() in {"approved", "verified"}
+            and (not city or str(provider.get("city", "")).lower() == city.lower())
+            and (not profession or str(provider.get("profession", "")).lower() == profession.lower())
+        ]
+        if stored:
+            return stored
+
         return [
             {
                 "providerId": "provider-001",

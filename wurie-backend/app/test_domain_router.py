@@ -146,6 +146,118 @@ class DomainRouterContractTests(unittest.TestCase):
         self.assertTrue(any(provider["providerId"] == "provider-900" for provider in pending))
         self.assertTrue(any(provider["verificationStatus"] == "pending" for provider in pending))
 
+    def test_provider_search_returns_customer_safe_approved_results(self):
+        from app.services.provider_service import ProviderService
+
+        service = ProviderService()
+        results = service.search_providers(profession="Electrician")
+
+        self.assertTrue(results)
+        self.assertTrue(all(item["verificationStatus"] in {"verified", "approved"} for item in results))
+        self.assertEqual(results[0]["profession"], "Electrician")
+
+    def test_provider_registration_route_persists_for_admin_workflow(self):
+        from app import main
+
+        request = main.ProviderRegistrationRequest(
+            name="Kadiatu Sesay",
+            trade="Electrician",
+            location="Bo",
+            experience="5 years",
+        )
+
+        registered = asyncio.run(main.register_provider(request, {"uid": "provider-user"}))
+        pending = asyncio.run(main.get_pending_providers({"claims": {"role": "admin"}}))
+
+        self.assertEqual(registered["status"], "success")
+        self.assertTrue(any(provider["providerId"] == registered["providerId"] for provider in pending))
+        self.assertEqual(
+            next(provider for provider in pending if provider["providerId"] == registered["providerId"])["profession"],
+            "Electrician",
+        )
+
+    def test_provider_admin_routes_reject_users_without_admin_role(self):
+        from app import main
+
+        with self.assertRaises(HTTPException) as context:
+            asyncio.run(main.get_pending_providers({"claims": {}}))
+
+        self.assertEqual(context.exception.status_code, 403)
+
+    def test_provider_service_uses_repository_backed_store(self):
+        from app.services.firestore_repository import FirestoreRepository
+        from app.services.provider_service import ProviderService
+
+        repository = FirestoreRepository("providers")
+        service = ProviderService(datastore=repository)
+        created = service.register_provider({
+            "name": "Mariam Kanu",
+            "profession": "Electrician",
+            "city": "Makeni",
+            "experience": "7 years",
+        })
+
+        other_service = ProviderService(datastore=repository)
+        pending = other_service.list_pending_providers()
+
+        self.assertEqual(created["status"], "success")
+        self.assertTrue(any(item["providerId"] == created["provider"]["providerId"] for item in pending))
+        self.assertEqual(
+            next(item for item in pending if item["providerId"] == created["provider"]["providerId"])["city"],
+            "Makeni",
+        )
+
+    def test_wallet_service_tracks_user_balance_and_transactions(self):
+        from app.services.wallet_service import WalletService
+
+        service = WalletService()
+        initial = service.get_balance("user-wallet-1")
+        service.add_transaction("user-wallet-1", 25.0, "Booking credit", "credit")
+        service.add_transaction("user-wallet-1", -10.0, "Service payout", "debit")
+        balance = service.get_balance("user-wallet-1")
+
+        self.assertEqual(initial["balance"], 150.0)
+        self.assertEqual(balance["balance"], 165.0)
+        self.assertEqual(len(balance["transactions"]), 2)
+
+    def test_booking_route_persists_authenticated_user_and_selected_provider(self):
+        from app import main
+
+        request = main.BookingRequest(
+            user_id="client-request-value",
+            provider_id="provider-900",
+            service_type="Electrician",
+            city="Makeni",
+            location="Central Market",
+        )
+
+        created = asyncio.run(main.create_booking(request, {"uid": "authenticated-user"}))
+        booking = main.adapters.bookings.get(created.booking_id)
+
+        self.assertEqual(created.status, "created")
+        self.assertEqual(booking["userId"], "authenticated-user")
+        self.assertEqual(booking["providerId"], "provider-900")
+        self.assertEqual(booking["serviceType"], "Electrician")
+
+    def test_booking_status_updates_and_history_are_tracked(self):
+        from app import main
+
+        request = main.BookingRequest(
+            user_id="customer-42",
+            provider_id="provider-321",
+            service_type="Plumber",
+            city="Bo",
+            location="Town Hall",
+        )
+
+        created = asyncio.run(main.create_booking(request, {"uid": "customer-42"}))
+        updated = asyncio.run(main.update_booking_status(created.booking_id, main.BookingStatusRequest(status="confirmed"), {"uid": "customer-42", "claims": {"role": "admin"}}))
+        history = asyncio.run(main.list_bookings({"uid": "customer-42"}, user_id="customer-42"))
+
+        self.assertEqual(created.status, "created")
+        self.assertEqual(updated["status"], "confirmed")
+        self.assertTrue(any(item["bookingId"] == created.booking_id for item in history))
+
     def test_profile_updates_sanitize_input_and_reject_invalid_settings(self):
         service = ProfileService()
 

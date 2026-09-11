@@ -24,12 +24,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.api.ProviderSummary
 import com.example.ui.theme.BotBubbleGreen
 import com.example.ui.theme.BrandPurple
 import com.example.ui.theme.BrandPurpleLight
 import com.example.viewmodel.ActivityViewModel
+import com.example.viewmodel.ServiceViewModel
 
 data class Provider(
+    val id: String,
     val name: String,
     val category: String,
     val rating: Double,
@@ -40,21 +43,37 @@ data class Provider(
 @Composable
 fun HireProviderScreen(
     onBack: () -> Unit,
-    onTrackProvider: () -> Unit = {},
+    onTrackProvider: (Provider) -> Unit = {},
     initialCategory: String? = null,
-    activityViewModel: ActivityViewModel = viewModel(factory = ActivityViewModel.Factory)
+    activityViewModel: ActivityViewModel = viewModel(factory = ActivityViewModel.Factory),
+    serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(initialCategory ?: "All") }
+    val backendProviders by serviceViewModel.providers.collectAsState()
+    val bookingState by serviceViewModel.bookingState.collectAsState()
 
-    val allProviders = listOf(
-        Provider("Ibrahim K.", "Electrician", 4.9, "Congo Cross", "Available Now"),
-        Provider("Mamadou Bah", "Plumber", 4.7, "Dixcove", "Busy"),
-        Provider("Fatu Turay", "Carpenter", 4.8, "Wellington", "Available Tomorrow"),
-        Provider("Oumar Diallo", "Mechanic", 4.9, "Lumley", "Available Now"),
-        Provider("Sia Koroma", "Electrician", 4.6, "Aberdeen", "Available Now")
-    )
+    LaunchedEffect(initialCategory) {
+        serviceViewModel.loadProviders(initialCategory?.takeUnless { it == "All" })
+    }
+
+    LaunchedEffect(bookingState) {
+        bookingState?.let { result ->
+            if (result.status == "created") {
+                Toast.makeText(context, "Booking ${result.bookingId} created", Toast.LENGTH_SHORT).show()
+                val provider = filteredProviders.firstOrNull { it.id == bookingState?.bookingId?.takeLastWhile { ch -> ch.isDigit() } }
+                val trackedProvider = provider ?: filteredProviders.firstOrNull()
+                if (trackedProvider != null) {
+                    onTrackProvider(trackedProvider)
+                }
+            } else if (result.status == "error") {
+                Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val allProviders = backendProviders.map { it.toProvider() }
 
     val categories = listOf("All", "Electrician", "Plumber", "Carpenter", "Mechanic")
 
@@ -157,14 +176,22 @@ fun HireProviderScreen(
                             iconName = "storefront",
                             colorHex = 0xFF4CAF50
                         )
-                        Toast.makeText(context, "Booking request sent to ${provider.name}!", Toast.LENGTH_SHORT).show()
-                        onTrackProvider()
+                        serviceViewModel.bookProvider(provider.id, provider.category, provider.location)
                     }
                 )
             }
         }
     }
 }
+
+private fun ProviderSummary.toProvider() = Provider(
+    id = providerId,
+    name = name,
+    category = profession,
+    rating = rating,
+    location = city,
+    status = if (available) "Available Now" else "Busy"
+)
 
 @Composable
 fun ProviderCard(provider: Provider, onBook: () -> Unit) {

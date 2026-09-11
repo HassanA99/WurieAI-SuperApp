@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Query
 from pydantic import BaseModel
 import firebase_admin
 from firebase_admin import auth, credentials
@@ -18,6 +18,8 @@ app = FastAPI(title="WurieAI Backend", version="1.0.0")
 router = DomainRouter()
 adapters = FirestoreServiceAdapters()
 profile_service = ProfileService()
+provider_service = adapters.provider_service
+ADMIN_ROLES = {"admin", "staff", "super_admin"}
 
 
 def startup() -> None:
@@ -103,6 +105,12 @@ class NotificationCreateRequest(BaseModel):
 async def firebase_dependency(authorization: str | None = Header(default=None)):
     """Keep the public FastAPI route using the shared token verification policy."""
     return await verify_firebase_token(authorization)
+
+
+def require_admin_role(user: dict) -> None:
+    role = (user.get("claims") or {}).get("role")
+    if role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access required")
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
 @trace_chat_flow
@@ -208,31 +216,50 @@ class ProviderApprovalRequest(BaseModel):
     reason: str | None = None
 
 
+class BookingStatusRequest(BaseModel):
+    status: str
+
+
 @app.get("/api/v1/providers/pending")
 async def get_pending_providers(user=Depends(firebase_dependency)):
     """Return all pending verification requests for the admin dashboard."""
-    role = (user.get("claims") or {}).get("role")
-    if role and role not in {"admin", "staff", "super_admin"}:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return ProviderService().list_pending_providers()
+    require_admin_role(user)
+    return provider_service.list_pending_providers()
+
+
+@app.get("/api/v1/bookings")
+async def list_bookings(user=Depends(firebase_dependency), user_id: str | None = None):
+    """Return booking records for the current user or a provided uid."""
+    target_user = user_id or user.get("uid")
+    if not target_user:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    if user.get("claims", {}).get("role") in ADMIN_ROLES or target_user == user.get("uid"):
+        return adapters.booking_service.list_bookings(target_user)
+    raise HTTPException(status_code=403, detail="Not allowed to view these bookings")
+
+
+@app.get("/api/v1/providers")
+async def search_providers(
+    city: str = Query(default=""),
+    profession: str = Query(default=""),
+    user=Depends(firebase_dependency),
+):
+    """Return approved providers for the customer hiring flow."""
+    return provider_service.search_providers(city=city, profession=profession)
 
 
 @app.post("/api/v1/providers/{provider_id}/approve")
 async def approve_provider(provider_id: str, request: ProviderApprovalRequest | None = None, user=Depends(firebase_dependency)):
     """Approve a provider record for the admin dashboard."""
-    role = (user.get("claims") or {}).get("role")
-    if role and role not in {"admin", "staff", "super_admin"}:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return ProviderService().approve_provider(provider_id)
+    require_admin_role(user)
+    return provider_service.approve_provider(provider_id)
 
 
 @app.post("/api/v1/providers/{provider_id}/reject")
 async def reject_provider(provider_id: str, request: ProviderApprovalRequest | None = None, user=Depends(firebase_dependency)):
     """Reject a provider record for the admin dashboard."""
-    role = (user.get("claims") or {}).get("role")
-    if role and role not in {"admin", "staff", "super_admin"}:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return ProviderService().reject_provider(provider_id, request.reason if request else None)
+    require_admin_role(user)
+    return provider_service.reject_provider(provider_id, request.reason if request else None)
 
 
 @app.post("/api/v1/market/price", response_model=ChatResponse)
@@ -253,21 +280,35 @@ async def market_price(request: MarketPriceRequest, user=Depends(firebase_depend
 async def create_booking(request: BookingRequest, user=Depends(firebase_dependency)):
     """Create a booking workflow and return a canonical backend response."""
     try:
-        service = BookingService()
-        result = service.create_booking(request.model_dump_json())
+        payload = request.model_dump()
+        payload["user_id"] = user.get("uid", request.user_id)
+        result = adapters.booking_service.create_booking(payload)
         return BookingResponse(
-            booking_id="booking-001",
-            status="created",
+            booking_id=result.workflow_id or result.data["bookingId"],
+            status=result.data["status"],
             message=result.text,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+
+@app.post("/api/v1/bookings/{booking_id}/status")
+async def update_booking_status(booking_id: str, request: BookingStatusRequest, user=Depends(firebase_dependency)):
+    """Update a booking lifecycle state for the authenticated user or admin."""
+    booking = adapters.booking_service.datastore.get(booking_id, {})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if user.get("claims", {}).get("role") in ADMIN_ROLES or booking.get("userId") == user.get("uid"):
+        updated = adapters.booking_service.update_status(booking_id, request.status)
+        return {"bookingId": booking_id, "status": updated["status"], "statusHistory": updated.get("statusHistory", [])}
+    raise HTTPException(status_code=403, detail="Not allowed to update this booking")
+
+
 @app.get("/api/v1/wallet/balance", response_model=WalletBalanceResponse)
 async def wallet_balance(user=Depends(firebase_dependency)):
     """Return a wallet balance response for the mobile repository contract."""
     try:
-        service = WalletService()
+        service = adapters.wallet_service
         result = service.balance("wallet")
         balance = service.get_balance(user.get("uid", "unknown"))
         return WalletBalanceResponse(
@@ -281,12 +322,18 @@ async def wallet_balance(user=Depends(firebase_dependency)):
 
 @app.post("/api/v1/providers/register")
 async def register_provider(request: ProviderRegistrationRequest, user=Depends(verify_firebase_token)):
-    """
-    Registers a new artisan/provider on the platform.
-    In production:
-    1. Saves the profile to Cloud SQL (PostgreSQL).
-    2. Converts the profile text into an Embedding (Vector).
-    3. Stores the embedding in pgvector/Pinecone so the ArtisanAgent can match them to users.
-    """
-    # Simulate database insertion and vectorization
-    return {"status": "success", "message": f"Provider {request.name} registered successfully."}
+    """Submit a provider profile for verification."""
+    result = provider_service.register_provider(
+        {
+            "name": request.name,
+            "profession": request.trade,
+            "city": request.location,
+            "experience": request.experience,
+        }
+    )
+    provider = result["provider"]
+    return {
+        "status": result["status"],
+        "message": result["message"],
+        "providerId": provider["providerId"],
+    }

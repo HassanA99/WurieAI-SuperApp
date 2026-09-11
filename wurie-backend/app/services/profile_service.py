@@ -22,7 +22,13 @@ class ProfileService:
     """
 
     def _firestore_enabled(self) -> bool:
-        return bool(firebase_admin._apps)
+        if not firebase_admin._apps:
+            return False
+        try:
+            firestore.client()
+            return True
+        except Exception:
+            return False
 
     @staticmethod
     def _sanitize_text(value: Any, field_name: str, max_length: int = 120) -> str:

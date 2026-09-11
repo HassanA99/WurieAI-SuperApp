@@ -17,6 +17,10 @@ class WurieApiRepository(
         return apiService.getPendingProviders(token)
     }
 
+    suspend fun searchProviders(city: String?, profession: String?, token: String): List<ProviderSummary> {
+        return apiService.searchProviders(token, city, profession)
+    }
+
     suspend fun approveProvider(providerId: String, token: String): ProviderSummary {
         return apiService.approveProvider(token, providerId)
     }
@@ -31,6 +35,14 @@ class WurieApiRepository(
 
     suspend fun createBooking(request: BookingRequest, token: String): BookingResponse {
         return apiService.createBooking(token, request)
+    }
+
+    suspend fun getBookings(token: String, userId: String? = null): List<BookingHistoryItem> {
+        return apiService.getBookings(token, userId)
+    }
+
+    suspend fun updateBookingStatus(bookingId: String, status: String, token: String): Map<String, Any> {
+        return apiService.updateBookingStatus(token, bookingId, BookingStatusRequest(status))
     }
 
     suspend fun getWalletBalance(token: String): WalletBalanceResponse {

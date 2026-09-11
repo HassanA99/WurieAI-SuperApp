@@ -1,0 +1,19 @@
+[project]
+name = "wurie-backend"
+version = "0.1.0"
+description = "WurieAI backend service"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn==0.24.0",
+    "google-generativeai==0.3.1",
+    "firebase-admin==6.2.0",
+    "langchain==0.0.339",
+    "langchain-google-genai==0.0.4",
+    "langgraph==0.0.15",
+    "langsmith==0.0.87",
+    "pydantic==2.5.2",
+]
+
+[tool.uv]
+package = false

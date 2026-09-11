@@ -11,7 +11,7 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,12 +19,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.theme.BotBubbleGreen
 import com.example.ui.theme.BrandPurple
 import com.example.ui.theme.BrandPurpleLight
+import com.example.viewmodel.ServiceViewModel
 
 @Composable
-fun ProviderTrackingScreen(onBack: () -> Unit) {
+fun ProviderTrackingScreen(
+    onBack: () -> Unit,
+    providerName: String = "Provider",
+    serviceType: String = "Service",
+    location: String = "Location",
+    serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
+) {
+    var currentStatus by remember { mutableStateOf("created") }
+    val statusOrder = listOf("created", "confirmed", "in_progress", "completed")
+    val steps = listOf(
+        "Booked" to "created",
+        "Confirmed" to "confirmed",
+        "On the way" to "in_progress",
+        "Completed" to "completed"
+    )
+    val currentIndex = statusOrder.indexOf(currentStatus).coerceAtLeast(0)
+
+    Column(
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -110,13 +129,18 @@ fun ProviderTrackingScreen(onBack: () -> Unit) {
                         fontSize = 14.sp
                     )
                     Text(
-                        text = "12 Mins",
+                        text = when (currentStatus) {
+                            "created" -> "12 Mins"
+                            "confirmed" -> "8 Mins"
+                            "in_progress" -> "4 Mins"
+                            else -> "Arrived"
+                        },
                         color = BotBubbleGreen,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
-                
+
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
@@ -124,18 +148,42 @@ fun ProviderTrackingScreen(onBack: () -> Unit) {
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "On The Way",
+                        text = steps.getOrNull(currentIndex)?.first ?: "Booked",
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                steps.forEachIndexed { index, (label, value) ->
+                    val active = index <= currentIndex
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (active) BotBubbleGreen.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.06f))
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (active) Color.White else Color.White.copy(alpha = 0.6f),
+                            fontSize = 11.sp,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
 
-            // Profile
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+            Spacer(modifier = Modifier.height(20.dp))
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Avatar Placeholder
                 Box(
@@ -152,20 +200,19 @@ fun ProviderTrackingScreen(onBack: () -> Unit) {
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Ibrahim (Electrician)",
+                        text = "$providerName ($serviceType)",
                         color = Color.White,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Star, contentDescription = "Rating", tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("4.9 Rating", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                    }
+                    Text(
+                        text = location,
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 13.sp
+                    )
                 }
-                
-                // Contact Buttons
+
                 Row {
                     IconButton(
                         onClick = { },
@@ -187,6 +234,28 @@ fun ProviderTrackingScreen(onBack: () -> Unit) {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Button(
+            onClick = {
+                val nextStatus = when (currentStatus) {
+                    "created" -> "confirmed"
+                    "confirmed" -> "in_progress"
+                    "in_progress" -> "completed"
+                    else -> "completed"
+                }
+                currentStatus = nextStatus
+                serviceViewModel.updateBookingStatus("booking-001", nextStatus)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BotBubbleGreen)
+        ) {
+            Text("Update Booking Status", color = BrandPurple, fontWeight = FontWeight.Bold)
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
     }
 }

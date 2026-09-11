@@ -5,6 +5,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import com.squareup.moshi.Json
 
 data class ChatRequest(
@@ -44,6 +45,23 @@ data class BookingRequest(
     val location: String? = null,
     val scheduledTime: String? = null,
     val notes: String? = null
+)
+
+data class BookingStatusRequest(
+    val status: String
+)
+
+data class BookingHistoryItem(
+    val bookingId: String,
+    val userId: String,
+    val providerId: String,
+    val serviceType: String,
+    val city: String,
+    val location: String? = null,
+    val scheduledTime: String? = null,
+    val notes: String? = null,
+    val status: String = "created",
+    val statusHistory: List<Map<String, Any>> = emptyList()
 )
 
 data class BookingResponse(
@@ -125,6 +143,8 @@ data class ProviderSummary(
     val profession: String,
     val city: String,
     val experience: String? = null,
+    val rating: Double = 0.0,
+    val available: Boolean = true,
     val verificationStatus: String = "pending"
 )
 
@@ -148,6 +168,13 @@ interface WurieApiService {
     @GET("/api/v1/providers/pending")
     suspend fun getPendingProviders(
         @Header("Authorization") token: String
+    ): List<ProviderSummary>
+
+    @GET("/api/v1/providers")
+    suspend fun searchProviders(
+        @Header("Authorization") token: String,
+        @Query("city") city: String? = null,
+        @Query("profession") profession: String? = null
     ): List<ProviderSummary>
 
     @POST("/api/v1/providers/{providerId}/approve")
@@ -175,6 +202,19 @@ interface WurieApiService {
         @Header("Authorization") token: String,
         @Body request: BookingRequest
     ): BookingResponse
+
+    @GET("/api/v1/bookings")
+    suspend fun getBookings(
+        @Header("Authorization") token: String,
+        @Query("user_id") userId: String? = null
+    ): List<BookingHistoryItem>
+
+    @POST("/api/v1/bookings/{bookingId}/status")
+    suspend fun updateBookingStatus(
+        @Header("Authorization") token: String,
+        @Path("bookingId") bookingId: String,
+        @Body request: BookingStatusRequest
+    ): Map<String, Any>
 
     @GET("/api/v1/wallet/balance")
     suspend fun getWalletBalance(

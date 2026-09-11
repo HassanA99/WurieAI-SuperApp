@@ -136,6 +136,7 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
         var selectedService by remember { mutableStateOf<String?>(null) }
         var selectedTradeForArtisan by remember { mutableStateOf<String?>(null) }
         var activeProviderChat by remember { mutableStateOf<Pair<String, String>?>(null) }
+        var trackedProvider by remember { mutableStateOf<Provider?>(null) }
 
         Scaffold(
             bottomBar = {
@@ -218,8 +219,20 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                 } else if (selectedService != null) {
                     when (selectedService) {
                         strings.marketPrices -> com.example.ui.MarketPricesScreen(onBack = { selectedService = null })
-                        strings.bookArtisan -> com.example.ui.HireProviderScreen(onBack = { selectedService = null }, onTrackProvider = { selectedService = "ProviderTracking" }, initialCategory = selectedTradeForArtisan)
-                        "ProviderTracking" -> com.example.ui.ProviderTrackingScreen(onBack = { selectedService = strings.bookArtisan })
+                        strings.bookArtisan -> com.example.ui.HireProviderScreen(
+                            onBack = { selectedService = null },
+                            onTrackProvider = { provider ->
+                                trackedProvider = provider
+                                selectedService = "ProviderTracking"
+                            },
+                            initialCategory = selectedTradeForArtisan
+                        )
+                        "ProviderTracking" -> com.example.ui.ProviderTrackingScreen(
+                            onBack = { selectedService = strings.bookArtisan },
+                            providerName = trackedProvider?.name ?: "Provider",
+                            serviceType = trackedProvider?.category ?: "Service",
+                            location = trackedProvider?.location ?: "Location"
+                        )
                         "ProviderDashboard" -> com.example.ui.ProviderDashboardScreen(onBack = { selectedService = null })
                         "ProviderRegistration" -> {
                             val serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
@@ -261,7 +274,16 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                 } else {
                     when (currentRoute) {
                         NavItem.Activity -> com.example.ui.ActivityScreen()
-                        NavItem.Wallet -> com.example.ui.WalletScreen()
+                        NavItem.Wallet -> {
+                            val serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
+                            val walletState by serviceViewModel.walletState.collectAsState()
+
+                            LaunchedEffect(Unit) {
+                                serviceViewModel.loadWalletBalance()
+                            }
+
+                            com.example.ui.WalletScreen(walletState = walletState)
+                        }
                         NavItem.WurieAI -> {
                             val viewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
                             
@@ -332,9 +354,12 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                         NavItem.Profile -> {
                             val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
                             val profileUiState by profileViewModel.uiState.collectAsState()
+                            val serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
+                            val bookingHistory by serviceViewModel.bookingHistory.collectAsState()
 
                             LaunchedEffect(Unit) {
                                 profileViewModel.loadProfile()
+                                serviceViewModel.loadBookings()
                             }
 
                             com.example.ui.ProfileScreen(
@@ -343,6 +368,7 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                                 currentLanguage = currentLanguage,
                                 onLanguageChange = { currentLanguage = it },
                                 profileUiState = profileUiState,
+                                bookingHistory = bookingHistory,
                                 onProfileSave = { name, phone, city ->
                                     profileViewModel.saveProfile(name, phone, city)
                                 },

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import firebase_admin
+from firebase_admin import firestore
+
 from app.services.firestore_repository import FirestoreRepository
 from app.services.market_service import MarketService
 from app.services.provider_service import ProviderService
@@ -16,14 +19,21 @@ class FirestoreServiceAdapters:
     """
 
     def __init__(self) -> None:
-        self.markets = FirestoreRepository("markets")
-        self.providers = FirestoreRepository("providers")
-        self.bookings = FirestoreRepository("bookings")
-        self.rides = FirestoreRepository("rides")
-        self.wallets = FirestoreRepository("wallets")
+        client = None
+        if firebase_admin._apps:
+            try:
+                client = firestore.client()
+            except Exception:
+                # Firebase may have an app object but no usable local credentials.
+                client = None
+        self.markets = FirestoreRepository("markets", client)
+        self.providers = FirestoreRepository("providers", client)
+        self.bookings = FirestoreRepository("bookings", client)
+        self.rides = FirestoreRepository("rides", client)
+        self.wallets = FirestoreRepository("wallets", client)
 
         self.market_service = MarketService()
-        self.provider_service = ProviderService()
-        self.booking_service = BookingService()
+        self.provider_service = ProviderService(datastore=self.providers)
+        self.booking_service = BookingService(datastore=self.bookings)
         self.ride_service = RideService()
-        self.wallet_service = WalletService()
+        self.wallet_service = WalletService(datastore=self.wallets)

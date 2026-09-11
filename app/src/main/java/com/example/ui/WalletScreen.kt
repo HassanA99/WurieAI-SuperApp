@@ -22,15 +22,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.api.WalletBalanceResponse
 import com.example.ui.theme.BrandPurple
 import com.example.ui.theme.BrandPurpleAccent
 import com.example.ui.theme.BrandPurpleLight
 import com.example.ui.util.LocalAppStrings
 
 @Composable
-fun WalletScreen() {
+fun WalletScreen(walletState: WalletBalanceResponse? = null) {
     val strings = LocalAppStrings.current
-    
+    val balance = walletState?.balance ?: 0.0
+    val currency = walletState?.currency ?: "USD"
+    val formattedBalance = "${currency} ${String.format("%,.2f", balance)}"
+    val transactions = walletState?.transactions ?: emptyList()
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -65,7 +70,7 @@ fun WalletScreen() {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "SLE 14,500.00",
+                        text = formattedBalance,
                         color = Color.White,
                         fontSize = 36.sp,
                         fontWeight = FontWeight.ExtraBold
@@ -119,10 +124,33 @@ fun WalletScreen() {
             Spacer(modifier = Modifier.height(16.dp))
         }
         
-        item { TransactionItem(title = "Keke Ride", amount = "-SLE 15.00", date = "Today, 10:30 AM", isPositive = false) }
-        item { TransactionItem(title = "Market Deposit", amount = "+SLE 500.00", date = "Yesterday, 4:15 PM", isPositive = true) }
-        item { TransactionItem(title = "Electrician Services", amount = "-SLE 150.00", date = "Sep 1, 2:00 PM", isPositive = false) }
-        item { TransactionItem(title = "Received from Fatima", amount = "+SLE 200.00", date = "Aug 29, 9:45 AM", isPositive = true) }
+        if (transactions.isEmpty()) {
+            item {
+                Text(
+                    text = "No recent transactions yet.",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            }
+        } else {
+            transactions.forEach { tx ->
+                val transactionType = tx["type"] as? String ?: "payment"
+                val amountValue = tx["amount"] as? Number ?: 0
+                val amountLabel = "${if (transactionType == "credit") "+" else "-"}${currency} ${String.format("%,.2f", amountValue.toDouble())}"
+                val description = tx["description"] as? String ?: transactionType.replaceFirstChar { it.uppercase() }
+                val timestamp = tx["timestamp"] as? String ?: "Recent"
+
+                item {
+                    TransactionItem(
+                        title = description,
+                        amount = amountLabel,
+                        date = timestamp,
+                        isPositive = transactionType == "credit"
+                    )
+                }
+            }
+        }
     }
 }
 

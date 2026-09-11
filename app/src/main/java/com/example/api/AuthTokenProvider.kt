@@ -12,4 +12,6 @@ class AuthTokenProvider(
             ?: error("Firebase did not return an ID token")
         return "Bearer $token"
     }
+
+    fun currentUserId(): String = auth.currentUser?.uid ?: error("User is not authenticated")
 }

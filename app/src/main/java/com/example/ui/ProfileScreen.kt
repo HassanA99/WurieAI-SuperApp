@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.api.BookingHistoryItem
 import com.example.api.ProfileSettings
 import com.example.api.UserProfile
 import com.example.ui.theme.*
@@ -73,6 +74,7 @@ fun ProfileScreen(
     onProviderPortal: () -> Unit = {},
     onAdminPortal: () -> Unit = {},
     profileUiState: ProfileUiState = ProfileUiState(),
+    bookingHistory: List<BookingHistoryItem> = emptyList(),
     onProfileSave: (String, String?, String?) -> Unit = { _, _, _ -> },
     onSettingsSave: (Boolean?, Boolean?, Boolean?, Boolean?, String?) -> Unit = { _, _, _, _, _ -> },
     onLogout: () -> Unit
@@ -112,42 +114,21 @@ fun ProfileScreen(
         pushNotificationsEnabled = settings?.notificationsEnabled ?: true
     }
 
-    // Interactive lists
-    var bookings by remember {
+    val bookings by remember(bookingHistory) {
         mutableStateOf(
-            listOf(
+            bookingHistory.map { item ->
                 BookingRecord(
-                    id = "BK-9021",
-                    title = "Keke Ride (Bajaj)",
-                    providerName = "Alusine Sesay",
-                    category = "Transport",
-                    dateTime = "Today, 2:45 PM",
-                    fare = "SLE 15.00",
-                    status = "Driver En Route",
-                    isLive = true,
-                    destination = "Lumley Roundabout → Congo Cross"
-                ),
-                BookingRecord(
-                    id = "BK-8842",
-                    title = "Emergency Plumbing",
-                    providerName = "Abu Koroma",
-                    category = "Artisan",
-                    dateTime = "Yesterday, 10:30 AM",
-                    fare = "SLE 180.00",
-                    status = "Completed",
-                    destination = "Wilkinson Road, Main Flat"
-                ),
-                BookingRecord(
-                    id = "BK-7619",
-                    title = "Electrical Diagnostics",
-                    providerName = "Fatu Turay",
-                    category = "Artisan",
-                    dateTime = "Sep 3, 2026",
-                    fare = "SLE 120.00",
-                    status = "Completed",
-                    destination = "Kroo Town Road Workshop"
+                    id = item.bookingId,
+                    title = "${item.serviceType} Service",
+                    providerName = item.providerId,
+                    category = item.serviceType,
+                    dateTime = item.scheduledTime ?: "Pending schedule",
+                    fare = "SLE 150.00",
+                    status = item.status.replaceFirstChar { it.uppercase() },
+                    isLive = item.status.lowercase() in listOf("created", "confirmed", "in_progress"),
+                    destination = item.location
                 )
-            )
+            }
         )
     }
 

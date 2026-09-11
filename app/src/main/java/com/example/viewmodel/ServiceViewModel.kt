@@ -26,8 +26,14 @@ class ServiceViewModel(
     private val _pendingProviders = MutableStateFlow<List<ProviderSummary>>(emptyList())
     val pendingProviders: StateFlow<List<ProviderSummary>> = _pendingProviders.asStateFlow()
 
+    private val _providers = MutableStateFlow<List<ProviderSummary>>(emptyList())
+    val providers: StateFlow<List<ProviderSummary>> = _providers.asStateFlow()
+
     private val _bookingState = MutableStateFlow<BookingResponse?>(null)
     val bookingState: StateFlow<BookingResponse?> = _bookingState.asStateFlow()
+
+    private val _bookingHistory = MutableStateFlow<List<BookingHistoryItem>>(emptyList())
+    val bookingHistory: StateFlow<List<BookingHistoryItem>> = _bookingHistory.asStateFlow()
 
     private val _walletState = MutableStateFlow<WalletBalanceResponse?>(null)
     val walletState: StateFlow<WalletBalanceResponse?> = _walletState.asStateFlow()
@@ -54,6 +60,17 @@ class ServiceViewModel(
                 _pendingProviders.value = repository.getPendingProviders(activeToken)
             } catch (e: Exception) {
                 _pendingProviders.value = emptyList()
+            }
+        }
+    }
+
+    fun loadProviders(profession: String? = null, token: String? = null) {
+        viewModelScope.launch {
+            try {
+                val activeToken = token ?: authTokenProvider.bearerToken()
+                _providers.value = repository.searchProviders(null, profession, activeToken)
+            } catch (_: Exception) {
+                _providers.value = emptyList()
             }
         }
     }
@@ -91,6 +108,17 @@ class ServiceViewModel(
         }
     }
 
+    fun loadBookings(userId: String? = null, token: String? = null) {
+        viewModelScope.launch {
+            try {
+                val activeToken = token ?: authTokenProvider.bearerToken()
+                _bookingHistory.value = repository.getBookings(activeToken, userId)
+            } catch (_: Exception) {
+                _bookingHistory.value = emptyList()
+            }
+        }
+    }
+
     fun createBooking(request: BookingRequest, token: String) {
         viewModelScope.launch {
             try {
@@ -102,15 +130,63 @@ class ServiceViewModel(
         }
     }
 
-    fun getWalletBalance(token: String) {
+    fun updateBookingStatus(bookingId: String, status: String, token: String? = null) {
         viewModelScope.launch {
             try {
-                val result = repository.getWalletBalance(token)
-                _walletState.value = result
+                val activeToken = token ?: authTokenProvider.bearerToken()
+                val result = repository.updateBookingStatus(bookingId, status, activeToken)
+                _bookingState.value = BookingResponse(
+                    bookingId = bookingId,
+                    status = status,
+                    message = "Booking status updated"
+                )
+                if (result.containsKey("status")) {
+                    _bookingHistory.value = _bookingHistory.value.map { booking ->
+                        if (booking.bookingId == bookingId) {
+                            booking.copy(status = result["status"].toString())
+                        } else {
+                            booking
+                        }
+                    }
+                }
             } catch (e: Exception) {
+                _bookingState.value = BookingResponse(bookingId, "error", e.localizedMessage ?: "booking status update failed")
+            }
+        }
+    }
+
+    fun bookProvider(providerId: String, serviceType: String, city: String) {
+        viewModelScope.launch {
+            try {
+                val token = authTokenProvider.bearerToken()
+                createBooking(
+                    BookingRequest(
+                        userId = authTokenProvider.currentUserId(),
+                        providerId = providerId,
+                        serviceType = serviceType,
+                        city = city
+                    ),
+                    token
+                )
+            } catch (e: Exception) {
+                _bookingState.value = BookingResponse("", "error", e.localizedMessage ?: "booking failed")
+            }
+        }
+    }
+
+    fun loadWalletBalance(token: String? = null) {
+        viewModelScope.launch {
+            try {
+                val activeToken = token ?: authTokenProvider.bearerToken()
+                _walletState.value = repository.getWalletBalance(activeToken)
+            } catch (_: Exception) {
                 _walletState.value = WalletBalanceResponse("unknown", 0.0, "USD", emptyList())
             }
         }
+    }
+
+    fun getWalletBalance(token: String) {
+        loadWalletBalance(token)
     }
 
     companion object {

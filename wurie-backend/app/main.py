@@ -3,7 +3,6 @@ from fastapi import FastAPI, Depends, HTTPException, Header, Query
 from pydantic import BaseModel
 import firebase_admin
 from firebase_admin import auth, credentials
-from app.agents.orchestrator import run_orchestrator
 from app.services.domain_router import DomainRouter
 from app.services.service_contracts import AgentResponse, CommentItem, LikeState, NotificationItem
 from app.services.service_contracts import ProfileSettings, UserProfile

@@ -6,41 +6,34 @@ on:
     paths:
       - "wurie-backend/**"
       - ".github/workflows/deploy-backend.yml"
+      - "render.yaml"
   workflow_dispatch:
-
-env:
-  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-  GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-  CLOUD_RUN_SERVICE: wurieai-backend
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    timeout-minutes: 15
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Set up Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Deploy FastAPI and AI agents to Cloud Run
+      - name: Validate Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          gcloud run deploy "$CLOUD_RUN_SERVICE" \
-            --source ./wurie-backend \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --platform managed \
-            --allow-unauthenticated \
-            --service-account "${{ secrets.GCP_RUNTIME_SERVICE_ACCOUNT }}" \
-            --set-env-vars "GOOGLE_CLOUD_PROJECT=$GCP_PROJECT_ID,LANGSMITH_TRACING=true,LANGSMITH_PROJECT=wurieai-production,LANGCHAIN_CALLBACKS_BACKGROUND=false" \
-            --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest,FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,LANGSMITH_API_KEY=LANGSMITH_API_KEY:latest"
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Missing RENDER_DEPLOY_HOOK_URL secret. Add it in GitHub repository secrets."
+            exit 1
+          fi
+
+      - name: Trigger Render deployment
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{"service":"wurieai-backend","branch":"main"}'
+
+      - name: Confirm deployment request accepted
+        run: echo "Render deployment hook triggered successfully. Configure the backend secrets in the Render dashboard."

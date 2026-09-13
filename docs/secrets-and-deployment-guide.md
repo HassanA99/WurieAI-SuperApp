@@ -1,6 +1,6 @@
 # WurieAI API and Secret Setup Guide
 
-This guide covers the credentials and configuration needed to run WurieAI locally and deploy it safely with GitHub Actions, Firebase, Gemini, LangSmith, and Cloud Run.
+This guide covers the credentials and configuration needed to run WurieAI locally and deploy it safely with GitHub Actions, Firebase, Gemini, LangSmith, and Render.
 
 ## Security rule
 
@@ -10,7 +10,7 @@ Never paste a real secret into Git, `.env.example`, the Android project, an APK,
 
 - Android app: Firebase Authentication, Firebase Android configuration, and calls to the WurieAI backend.
 - Firebase: Authentication, Firestore, and the Android app registration.
-- Cloud Run: hosts the FastAPI backend and LangGraph agents.
+- Render: hosts the FastAPI backend and LangGraph agents from `render.yaml`.
 - Gemini: server-side model provider called by the backend agents.
 - LangSmith: tracing, evaluation, and agent observability.
 - GitHub Actions: builds versioned APKs and deploys the backend.
@@ -37,7 +37,7 @@ The backend verifies Firebase ID tokens and accesses Firestore with Firebase Adm
 4. Create a dedicated runtime service account, for example `wurieai-backend-runtime`.
 5. Grant only the roles required for Firebase Admin and Firestore access.
 6. For local development, create a JSON key only when necessary and store it outside the repository.
-7. Set `FIREBASE_SERVICE_ACCOUNT_PATH` locally, or store the complete JSON in Secret Manager as `FIREBASE_SERVICE_ACCOUNT_JSON` for Cloud Run.
+7. Set `FIREBASE_SERVICE_ACCOUNT_PATH` locally, or store the complete JSON in Render as `FIREBASE_SERVICE_ACCOUNT_JSON`.
 
 Never commit the JSON service-account file.
 
@@ -47,7 +47,7 @@ Never commit the JSON service-account file.
 2. Create a Gemini API key for the backend project.
 3. Restrict the key where possible and monitor quotas.
 4. Store it locally as `GEMINI_API_KEY` in `wurie-backend/.env`.
-5. Store it in Google Secret Manager under `GEMINI_API_KEY` for Cloud Run.
+5. Add it to the Render service as `GEMINI_API_KEY`.
 
 The Gemini key must not be in the root Android `.env`, Android `BuildConfig`, Firebase client configuration, or APK. The mobile app calls the backend; the backend calls Gemini.
 
@@ -57,9 +57,9 @@ The Gemini key must not be in the root Android `.env`, Android `BuildConfig`, Fi
 2. Create or select a workspace and tracing project, such as `wurieai-production`.
 3. Create a LangSmith API key.
 4. Revoke any key previously shared publicly.
-5. Store the replacement locally as `LANGSMITH_API_KEY` in `wurie-backend/.env`.
-6. Store it in Google Secret Manager under `LANGSMITH_API_KEY` for Cloud Run.
-7. Set `LANGSMITH_TRACING=true` and `LANGSMITH_PROJECT=wurieai-production` in Cloud Run.
+5. Store the replacement locally as `LANGCHAIN_API_KEY` in `wurie-backend/.env`.
+6. Add it as `LANGCHAIN_API_KEY` in the Render service environment.
+7. Set `LANGSMITH_TRACING=true` and `LANGSMITH_PROJECT=wurieai-production` in Render.
 8. Use the workspace skill at `.github/skills/langsmith-trace/SKILL.md` for trace queries and debugging.
 
 LangSmith is for agent tracing, evaluation, and supported agent deployment workflows. It does not replace the FastAPI host for the profile, provider, booking, wallet, and social APIs.
@@ -78,44 +78,41 @@ Fill in real values only on your machine. For local Firebase credentials, use:
 FIREBASE_SERVICE_ACCOUNT_PATH=/secure/path/firebase-service-account.json
 GEMINI_API_KEY=...
 LANGSMITH_TRACING=true
-LANGSMITH_API_KEY=...
+LANGCHAIN_API_KEY=...
 LANGSMITH_PROJECT=wurieai-development
 WURIE_DEV_AUTH_FALLBACK=false
 ```
 
 The current Python service reads Firebase and tracing environment variables. Run the backend from `wurie-backend` with uv or the repository virtual environment.
 
-## 6. GitHub Actions secrets and variables
+## 6. Render and GitHub Actions secrets
 
-Create these repository secrets under Settings -> Secrets and variables -> Actions:
+Add these secrets to the Render service:
 
-- `GCP_WORKLOAD_IDENTITY_PROVIDER`: full Workload Identity Federation provider resource name.
-- `GCP_DEPLOY_SERVICE_ACCOUNT`: GitHub deployer service-account email.
-- `GCP_RUNTIME_SERVICE_ACCOUNT`: Cloud Run runtime service-account email.
+- `GEMINI_API_KEY`
+- `FIREBASE_SERVICE_ACCOUNT_JSON`
+- `LANGCHAIN_API_KEY`
+- `GOOGLE_CLOUD_PROJECT`
 
-Create this repository variable:
+Set these non-secret Render variables:
 
-- `GCP_PROJECT_ID`: Google Cloud project ID.
+- `LANGSMITH_TRACING=true`
+- `LANGSMITH_PROJECT=wurieai-production`
+- `LANGCHAIN_CALLBACKS_BACKGROUND=false`
+- `WURIE_DEV_AUTH_FALLBACK=false`
 
-The workflow also uses the automatically provided `GITHUB_TOKEN` to create releases.
+Create the Render deploy hook in the Render dashboard, then save its URL as the GitHub Actions secret `RENDER_DEPLOY_HOOK_URL`. The workflow uses that secret to request a deployment after backend changes reach `main`.
 
-Do not put Gemini, Firebase Admin, or LangSmith values in GitHub workflow YAML. The deployment workflow reads them from Google Secret Manager at runtime.
+Do not put Gemini, Firebase Admin, or LangSmith values in GitHub workflow YAML. Render stores and injects them at runtime.
 
-## 7. Google Cloud setup for Cloud Run
+## 7. Render setup
 
-1. Select the Firebase project in Google Cloud Console.
-2. Enable Cloud Run, Cloud Build, Artifact Registry, Secret Manager, IAM Credentials, and Service Usage APIs.
-3. Create the deployer and runtime service accounts.
-4. Configure GitHub Actions Workload Identity Federation so GitHub can deploy without a long-lived JSON key.
-5. Create Secret Manager secrets named:
-   - `GEMINI_API_KEY`
-   - `FIREBASE_SERVICE_ACCOUNT_JSON`
-   - `LANGSMITH_API_KEY`
-6. Grant the Cloud Run runtime service account Secret Manager Secret Accessor on those secrets.
-7. Grant the GitHub deployer permission to deploy Cloud Run services and build source deployments.
-8. Push a change under `wurie-backend/` to trigger `.github/workflows/deploy-backend.yml`.
-
-The service is deployed as `wurieai-backend` in `us-central1` by default.
+1. Create a new Web Service in Render using this repository.
+2. Select the Docker runtime and use `render.yaml`, or create the service from the Blueprint.
+3. Confirm the service name is `wurieai-backend` and the health path is `/health`.
+4. Add the Render secrets and variables listed above.
+5. Create a deploy hook and save its URL in GitHub as `RENDER_DEPLOY_HOOK_URL`.
+6. Push a backend change under `wurie-backend/` to trigger `.github/workflows/deploy-backend.yml`.
 
 ## 8. Android build and APK releases
 
@@ -148,9 +145,9 @@ If any credential is exposed:
 
 1. Revoke it immediately at the issuing provider.
 2. Create a replacement.
-3. Update Secret Manager or the local ignored `.env`.
-4. Redeploy Cloud Run.
-5. Check GitHub Actions logs and LangSmith/GCP audit logs.
+3. Update Render or the local ignored `.env`.
+4. Redeploy the Render service.
+5. Check GitHub Actions logs and LangSmith audit logs.
 6. Do not try to hide the old key by editing history alone; it must be revoked.
 
 ## Final checklist
@@ -161,8 +158,7 @@ If any credential is exposed:
 - [ ] Firebase Admin service account stored outside Git.
 - [ ] Gemini key stored only in backend secret storage.
 - [ ] LangSmith key rotated and stored only in backend secret storage.
-- [ ] Cloud Run runtime can read all required secrets.
-- [ ] GitHub Workload Identity Federation configured.
-- [ ] GitHub repository variables/secrets configured.
+- [ ] Render runtime can read all required secrets.
+- [ ] Render deploy hook and GitHub Actions secret configured.
 - [ ] Backend deployment workflow succeeds.
 - [ ] APK release tag produces the expected versioned artifact.

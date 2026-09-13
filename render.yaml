@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: wurieai-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./wurie-backend/Dockerfile
+    dockerContext: ./wurie-backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: LANGSMITH_TRACING
+        value: "true"
+      - key: LANGSMITH_PROJECT
+        value: wurieai-production
+      - key: LANGCHAIN_CALLBACKS_BACKGROUND
+        value: "false"
+      - key: WURIE_DEV_AUTH_FALLBACK
+        value: "false"
+      - key: PORT
+        value: "10000"
+
+    # Render dashboard secrets should include:
+    #   GEMINI_API_KEY
+    #   LANGCHAIN_API_KEY
+    #   LANGSMITH_API_KEY
+    #   FIREBASE_SERVICE_ACCOUNT_JSON
+    #   GOOGLE_CLOUD_PROJECT

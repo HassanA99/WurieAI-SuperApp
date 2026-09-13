@@ -1,6 +1,6 @@
 # WurieAI Backend
 
-The backend targets Python 3.10 through 3.12. The Docker image uses Python 3.10, but local development is now managed with uv and Python 3.12 is the recommended interpreter for compatibility with the pinned dependencies.
+The backend targets Python 3.10 through 3.12. The Docker image and local development use Python 3.12 for compatibility with the pinned dependencies.
 
 ## Local setup
 
@@ -16,7 +16,7 @@ Set Firebase credentials in `.env` before starting authenticated routes. Keep `W
 ## Run
 
 ```bash
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+uv run --env-file .env uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 ```
 
 The health check is available at `http://localhost:8080/health`.
@@ -32,3 +32,4 @@ uv run python -m unittest app.test_domain_router
 - uv replaces the old pip-based local environment flow.
 - Dependencies are defined in `pyproject.toml` and resolved by uv.
 - `requirements.txt` remains as a compatibility fallback for other tools and container workflows.
+- Render supplies production environment variables from its dashboard; GitHub Actions only triggers the Render deploy hook.

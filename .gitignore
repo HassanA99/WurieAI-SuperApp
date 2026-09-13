@@ -21,4 +21,5 @@ debug.keystore
 .venv/
 wurie-backend/.venv/
 __pycache__/
+*.py[cod]
 debug.keystore.base64

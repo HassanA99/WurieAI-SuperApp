@@ -141,10 +141,7 @@ class AuthViewModel : ViewModel() {
             } catch (e: FirebaseAuthInvalidCredentialsException) {
                 _authState.value = AuthState.Error("Incorrect password or email. Please check and try again.")
             } catch (e: Exception) {
-                val msg = e.localizedMessage ?: "Login failed"
-                // Fallback to local session on any configuration or network issue so users aren't blocked
-                saveLocalUser(context, "Wurie Explorer", trimmedEmail)
-                _authState.value = AuthState.Success
+                _authState.value = AuthState.Error(e.localizedMessage ?: "Login failed. Check your connection and try again.")
             }
         }
     }
@@ -199,7 +196,7 @@ class AuthViewModel : ViewModel() {
                 }
                 _authState.value = AuthState.Success
             } catch (e: Exception) {
-                _authState.value = AuthState.Success // Fallback to main so user isn't stuck
+                _authState.value = AuthState.Error(e.localizedMessage ?: "Could not save your profile. Please try again.")
             }
         }
     }
@@ -218,7 +215,7 @@ class AuthViewModel : ViewModel() {
                 _authState.value = AuthState.NeedProfileSetup
             }
         } catch (e: Exception) {
-            _authState.value = AuthState.Success // Fallback to main
+            _authState.value = AuthState.Error(e.localizedMessage ?: "Could not load your profile. Please try again.")
         }
     }
 

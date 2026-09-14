@@ -195,6 +195,10 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    fun skipProfileSetup() {
+        _authState.value = AuthState.Success
+    }
+
     private suspend fun checkIfProfileExists() {
         val uid = auth.currentUser?.uid ?: return
         try {

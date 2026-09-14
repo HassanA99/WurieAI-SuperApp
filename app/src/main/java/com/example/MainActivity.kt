@@ -90,6 +90,11 @@ class MainActivity : FragmentActivity() {
                                     popUpTo("auth") { inclusive = true }
                                 }
                             },
+                            onSkip = {
+                                navController.navigate("main") {
+                                    popUpTo("auth") { inclusive = true }
+                                }
+                            },
                             viewModel = authViewModel
                         )
                     }

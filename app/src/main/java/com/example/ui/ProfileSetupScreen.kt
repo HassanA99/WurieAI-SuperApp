@@ -28,6 +28,7 @@ import com.example.viewmodel.AuthState
 @Composable
 fun ProfileSetupScreen(
     onComplete: () -> Unit,
+    onSkip: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
     var firstName by remember { mutableStateOf("") }
@@ -146,6 +147,20 @@ fun ProfileSetupScreen(
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            viewModel.skipProfileSetup()
+                            onSkip()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Skip for now",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 14.sp
                         )
                     }
                 }

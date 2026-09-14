@@ -44,7 +44,6 @@ fun ProviderTrackingScreen(
     val currentIndex = statusOrder.indexOf(currentStatus).coerceAtLeast(0)
 
     Column(
-    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BrandPurple)

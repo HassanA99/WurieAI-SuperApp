@@ -39,6 +39,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.ui.LoginScreen
 import com.example.ui.ProfileScreen
+import com.example.ui.Provider
 import com.example.ui.util.AppLanguage
 import com.example.ui.util.ProvideAppLanguage
 import com.example.ui.util.LocalAppStrings
@@ -119,6 +120,7 @@ sealed class NavItem(val title: String, val icon: ImageVector?) {
 @Composable
 fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
     var currentLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
+    val authViewModel: AuthViewModel = viewModel()
 
     ProvideAppLanguage(language = currentLanguage) {
         val strings = LocalAppStrings.current

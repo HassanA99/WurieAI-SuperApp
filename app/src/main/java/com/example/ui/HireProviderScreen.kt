@@ -54,6 +54,15 @@ fun HireProviderScreen(
     val backendProviders by serviceViewModel.providers.collectAsState()
     val bookingState by serviceViewModel.bookingState.collectAsState()
 
+    val allProviders = backendProviders.map { it.toProvider() }
+
+    val categories = listOf("All", "Electrician", "Plumber", "Carpenter", "Mechanic")
+
+    val filteredProviders = allProviders.filter {
+        (selectedCategory == "All" || it.category == selectedCategory) &&
+        (it.name.contains(searchQuery, ignoreCase = true) || it.category.contains(searchQuery, ignoreCase = true))
+    }
+
     LaunchedEffect(initialCategory) {
         serviceViewModel.loadProviders(initialCategory?.takeUnless { it == "All" })
     }
@@ -71,15 +80,6 @@ fun HireProviderScreen(
                 Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    val allProviders = backendProviders.map { it.toProvider() }
-
-    val categories = listOf("All", "Electrician", "Plumber", "Carpenter", "Mechanic")
-
-    val filteredProviders = allProviders.filter {
-        (selectedCategory == "All" || it.category == selectedCategory) &&
-        (it.name.contains(searchQuery, ignoreCase = true) || it.category.contains(searchQuery, ignoreCase = true))
     }
 
     Column(

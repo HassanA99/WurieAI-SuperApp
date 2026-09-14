@@ -93,6 +93,17 @@ class AuthViewModel : ViewModel() {
                     } catch (e: Exception) {
                         Log.w("AuthViewModel", "Failed to update profile name", e)
                     }
+                    try {
+                        firestore.collection("users").document(user.uid).set(
+                            mapOf(
+                                "displayName" to trimmedName,
+                                "email" to trimmedEmail,
+                                "profileComplete" to false
+                            )
+                        ).await()
+                    } catch (e: Exception) {
+                        Log.w("AuthViewModel", "Failed to create basic Firestore profile", e)
+                    }
                 }
                 saveLocalUser(context, trimmedName, trimmedEmail)
                 _authState.value = AuthState.NeedProfileSetup
@@ -101,10 +112,7 @@ class AuthViewModel : ViewModel() {
             } catch (e: FirebaseAuthWeakPasswordException) {
                 _authState.value = AuthState.Error("Password is too weak. Please use at least 6 characters.")
             } catch (e: Exception) {
-                val msg = e.localizedMessage ?: "Sign up failed"
-                // Graceful fallback for demo or when Firebase provider is not yet enabled
-                saveLocalUser(context, trimmedName, trimmedEmail)
-                _authState.value = AuthState.NeedProfileSetup
+                _authState.value = AuthState.Error(e.localizedMessage ?: "Sign up failed. Please try again.")
             }
         }
     }
@@ -184,7 +192,8 @@ class AuthViewModel : ViewModel() {
                         "lastName" to lastName,
                         "phone" to phone,
                         "city" to city,
-                        "email" to (auth.currentUser?.email ?: "")
+                        "email" to (auth.currentUser?.email ?: ""),
+                        "profileComplete" to true
                     )
                     firestore.collection("users").document(uid).set(profile).await()
                 }

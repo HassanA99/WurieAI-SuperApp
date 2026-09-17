@@ -16,7 +16,10 @@ data class ChatRequest(
 data class ChatResponse(
     val text: String,
     val action: String? = null,
-    val target: String? = null
+    val target: String? = null,
+    val data: Map<String, Any> = emptyMap(),
+    val service: String? = null,
+    @Json(name = "workflow_id") val workflowId: String? = null
 )
 
 data class ProviderRegistrationRequest(
@@ -38,12 +41,12 @@ data class MarketPriceRequest(
 )
 
 data class BookingRequest(
-    val userId: String,
-    val providerId: String,
-    val serviceType: String,
+    @Json(name = "user_id") val userId: String,
+    @Json(name = "provider_id") val providerId: String,
+    @Json(name = "service_type") val serviceType: String,
     val city: String,
     val location: String? = null,
-    val scheduledTime: String? = null,
+    @Json(name = "scheduled_time") val scheduledTime: String? = null,
     val notes: String? = null
 )
 
@@ -52,20 +55,20 @@ data class BookingStatusRequest(
 )
 
 data class BookingHistoryItem(
-    val bookingId: String,
-    val userId: String,
-    val providerId: String,
-    val serviceType: String,
+    @Json(name = "booking_id") val bookingId: String,
+    @Json(name = "user_id") val userId: String,
+    @Json(name = "provider_id") val providerId: String,
+    @Json(name = "service_type") val serviceType: String,
     val city: String,
     val location: String? = null,
-    val scheduledTime: String? = null,
+    @Json(name = "scheduled_time") val scheduledTime: String? = null,
     val notes: String? = null,
     val status: String = "created",
-    val statusHistory: List<Map<String, Any>> = emptyList()
+    @Json(name = "status_history") val statusHistory: List<Map<String, Any>> = emptyList()
 )
 
 data class BookingResponse(
-    val bookingId: String,
+    @Json(name = "booking_id") val bookingId: String,
     val status: String,
     val message: String
 )
@@ -95,7 +98,6 @@ data class ProfileUpdateRequest(
 
 data class ProfileSettings(
     @Json(name = "notifications_enabled") val notificationsEnabled: Boolean = true,
-    @Json(name = "biometric_enabled") val biometricEnabled: Boolean = false,
     @Json(name = "push_enabled") val pushEnabled: Boolean = true,
     @Json(name = "offline_cache_enabled") val offlineCacheEnabled: Boolean = true,
     val language: String = "en"
@@ -103,7 +105,6 @@ data class ProfileSettings(
 
 data class ProfileSettingsUpdateRequest(
     @Json(name = "notifications_enabled") val notificationsEnabled: Boolean? = null,
-    @Json(name = "biometric_enabled") val biometricEnabled: Boolean? = null,
     @Json(name = "push_enabled") val pushEnabled: Boolean? = null,
     @Json(name = "offline_cache_enabled") val offlineCacheEnabled: Boolean? = null,
     val language: String? = null

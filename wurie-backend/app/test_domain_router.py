@@ -47,7 +47,6 @@ class DomainRouterContractTests(unittest.TestCase):
     def test_profile_settings_and_notifications_contract_shape(self):
         settings = ProfileSettings(
             notifications_enabled=True,
-            biometric_enabled=True,
             push_enabled=True,
             offline_cache_enabled=True,
             language="en",
@@ -61,7 +60,6 @@ class DomainRouterContractTests(unittest.TestCase):
         )
 
         self.assertTrue(settings.notifications_enabled)
-        self.assertTrue(settings.biometric_enabled)
         self.assertEqual(notification.category, "provider")
         self.assertEqual(notification.title, "New provider match")
 

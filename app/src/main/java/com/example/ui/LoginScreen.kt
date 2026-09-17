@@ -1,11 +1,5 @@
 package com.example.ui
 
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
-import android.widget.Toast
-import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,7 +11,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,53 +20,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.ui.theme.BrandPurple
-import com.example.ui.theme.BrandPurpleAccent
 import com.example.viewmodel.AuthState
 import com.example.viewmodel.AuthViewModel
-
-fun authenticateWithBiometrics(context: Context, onSuccess: () -> Unit) {
-    val fragmentActivity = context as? FragmentActivity
-    if (fragmentActivity == null) {
-        Toast.makeText(context, "Biometric authentication not supported here", Toast.LENGTH_SHORT).show()
-        // Fallback for preview mode if needed
-        onSuccess()
-        return
-    }
-
-    val executor = ContextCompat.getMainExecutor(context)
-    val biometricPrompt = BiometricPrompt(fragmentActivity, executor,
-        object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                super.onAuthenticationError(errorCode, errString)
-                Toast.makeText(context, "Authentication error: $errString", Toast.LENGTH_SHORT).show()
-                // Let the user fallback to guest/preview if they cancel
-            }
-
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                super.onAuthenticationSucceeded(result)
-                Toast.makeText(context, "Authentication succeeded!", Toast.LENGTH_SHORT).show()
-                onSuccess()
-            }
-
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                Toast.makeText(context, "Authentication failed", Toast.LENGTH_SHORT).show()
-            }
-        })
-
-    val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Biometric login for WurieAI")
-        .setSubtitle("Log in using your biometric credential")
-        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
-        .build()
-
-    biometricPrompt.authenticate(promptInfo)
-}
 
 @Composable
 fun LoginScreen(onLoginSuccess: () -> Unit, authViewModel: AuthViewModel = viewModel()) {
     val authState by authViewModel.authState.collectAsState()
-    val context = LocalContext.current
 
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
@@ -144,41 +96,9 @@ fun LoginScreen(onLoginSuccess: () -> Unit, authViewModel: AuthViewModel = viewM
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     GoogleSignInButton(onClick = { authViewModel.signInWithGoogle(context) })
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { authenticateWithBiometrics(context, onLoginSuccess) },
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPurpleAccent),
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) {
-                        Text("Unlock with Biometrics", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { authViewModel.previewBypass() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
-                    ) {
-                        Text("Continue in Preview Mode", color = Color.White)
-                    }
                 }
                 else -> {
                     GoogleSignInButton(onClick = { authViewModel.signInWithGoogle(context) })
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { authenticateWithBiometrics(context, onLoginSuccess) },
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPurpleAccent),
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) {
-                        Text("Unlock with Biometrics", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { authViewModel.previewBypass() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
-                    ) {
-                        Text("Continue as Guest (Preview)", color = Color.White)
-                    }
                 }
             }
         }

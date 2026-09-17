@@ -379,10 +379,9 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                                 onProfileSave = { name, phone, city ->
                                     profileViewModel.saveProfile(name, phone, city)
                                 },
-                                onSettingsSave = { notifications, biometric, push, offline, language ->
+                                onSettingsSave = { notifications, push, offline, language ->
                                     profileViewModel.saveSettings(
                                         notificationsEnabled = notifications,
-                                        biometricEnabled = biometric,
                                         pushEnabled = push,
                                         offlineCacheEnabled = offline,
                                         language = language

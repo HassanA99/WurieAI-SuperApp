@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -26,6 +27,7 @@ import com.example.viewmodel.AuthViewModel
 @Composable
 fun LoginScreen(onLoginSuccess: () -> Unit, authViewModel: AuthViewModel = viewModel()) {
     val authState by authViewModel.authState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {

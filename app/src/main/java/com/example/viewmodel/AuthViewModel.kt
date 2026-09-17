@@ -163,21 +163,6 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun signInAsGuest(context: Context) {
-        _authState.value = AuthState.Loading
-        viewModelScope.launch {
-            try {
-                auth.signInAnonymously().await()
-                saveLocalUser(context, "Guest Explorer", "guest@wurie.ai")
-                _authState.value = AuthState.Success
-            } catch (e: Exception) {
-                // Fallback to offline demo mode
-                saveLocalUser(context, "Guest Explorer", "guest@wurie.ai")
-                _authState.value = AuthState.Success
-            }
-        }
-    }
-
     fun completeProfile(firstName: String, lastName: String, phone: String, city: String) {
         val uid = auth.currentUser?.uid
         _authState.value = AuthState.Loading
@@ -229,7 +214,7 @@ class AuthViewModel : ViewModel() {
                 if (serverClientId.isEmpty() || serverClientId == "MY_WEB_CLIENT_ID") {
                     _authState.value = AuthState.CredentialNotice(
                         title = "Google Sign-In Credentials",
-                        message = "Google Cloud Web Client ID is not configured yet. You can sign in with your email or use Instant Demo Access to continue."
+                        message = "Google Cloud Web Client ID is not configured yet. Please sign in with your email instead."
                     )
                     return@launch
                 }
@@ -257,7 +242,7 @@ class AuthViewModel : ViewModel() {
             } catch (e: NoCredentialException) {
                 _authState.value = AuthState.CredentialNotice(
                     title = "No Google Account",
-                    message = "No Google account was found on this device or emulator. Please sign in with email or continue with Instant Demo Access."
+                        message = "No Google account was found on this device or emulator. Please sign in with email instead."
                 )
             } catch (e: GetCredentialException) {
                 val msg = e.localizedMessage ?: "Unknown error"
@@ -265,19 +250,19 @@ class AuthViewModel : ViewModel() {
                 if (msg.contains("10:") || msg.contains("16:") || msg.contains("Developer Error", ignoreCase = true) || msg.contains("Cannot find", ignoreCase = true)) {
                     _authState.value = AuthState.CredentialNotice(
                         title = "Google Credentials Setup",
-                        message = "Google Cloud Client ID and SHA-1 certificate configuration are pending in the Firebase Console. You can use Email Sign-In or Instant Demo Access right away."
+                        message = "Google Cloud Client ID and SHA-1 certificate configuration are pending in the Firebase Console. Please use Email Sign-In instead."
                     )
                 } else {
                     _authState.value = AuthState.CredentialNotice(
                         title = "Google Sign-In",
-                        message = "Google Sign-In could not complete ($msg). You can continue with Email Sign-In or Instant Demo Access."
+                        message = "Google Sign-In could not complete ($msg). Please use Email Sign-In instead."
                     )
                 }
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Google sign-in error", e)
                 _authState.value = AuthState.CredentialNotice(
                     title = "Google Sign-In Notice",
-                    message = "Google Sign-In encountered an issue (${e.localizedMessage ?: "configuration mismatch"}). You can sign in with your email or use Instant Demo Access."
+                    message = "Google Sign-In encountered an issue (${e.localizedMessage ?: "configuration mismatch"}). Please sign in with your email instead."
                 )
             }
         }
@@ -304,7 +289,7 @@ class AuthViewModel : ViewModel() {
                     if (msg.contains("DEVELOPER_ERROR", ignoreCase = true) || msg.contains("fingerprint", ignoreCase = true)) {
                         _authState.value = AuthState.CredentialNotice(
                             title = "Firebase SHA-1 Notice",
-                            message = "The build SHA-1 fingerprint needs to be added in the Firebase Console. You can continue with Email or Instant Demo Access."
+                            message = "The build SHA-1 fingerprint needs to be added in the Firebase Console. Please use Email Sign-In instead."
                         )
                     } else {
                         _authState.value = AuthState.Error(msg)
@@ -336,11 +321,6 @@ class AuthViewModel : ViewModel() {
             Log.w("AuthViewModel", "Sign out error", e)
         }
         _authState.value = AuthState.Idle
-    }
-    
-    // For AI Studio emulator preview testing
-    fun previewBypass() {
-        _authState.value = AuthState.Success
     }
 }
 

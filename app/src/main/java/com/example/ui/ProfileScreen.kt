@@ -102,13 +102,11 @@ fun ProfileScreen(
     var showSafetyTestToast by remember { mutableStateOf(false) }
 
     // Security & feature toggles
-    var biometricEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.biometricEnabled ?: true) }
     var twoFactorEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.pushEnabled ?: true) }
     var offlineCacheEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.offlineCacheEnabled ?: true) }
     var pushNotificationsEnabled by remember(profileUiState.settings) { mutableStateOf(settings?.notificationsEnabled ?: true) }
 
     LaunchedEffect(settings) {
-        biometricEnabled = settings?.biometricEnabled ?: true
         twoFactorEnabled = settings?.pushEnabled ?: true
         offlineCacheEnabled = settings?.offlineCacheEnabled ?: true
         pushNotificationsEnabled = settings?.notificationsEnabled ?: true
@@ -622,35 +620,6 @@ fun ProfileScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Biometric App Lock", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text("Require fingerprint on app resume", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
-                            }
-                            Switch(
-                                checked = biometricEnabled,
-                                onCheckedChange = {
-                                    biometricEnabled = it
-                                    onSettingsSave(
-                                        pushNotificationsEnabled,
-                                        it,
-                                        twoFactorEnabled,
-                                        offlineCacheEnabled,
-                                        settings?.language ?: "en"
-                                    )
-                                },
-                                colors = SwitchDefaults.colors(checkedThumbColor = BotBubbleGreen, checkedTrackColor = BotBubbleGreen.copy(alpha = 0.3f))
-                            )
-                        }
-
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
                                 Text("Two-Factor SMS Escrow Release", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 Text("OTP verification for high-value payouts", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
                             }
@@ -660,7 +629,6 @@ fun ProfileScreen(
                                     twoFactorEnabled = it
                                     onSettingsSave(
                                         pushNotificationsEnabled,
-                                        biometricEnabled,
                                         it,
                                         offlineCacheEnabled,
                                         settings?.language ?: "en"
@@ -689,7 +657,6 @@ fun ProfileScreen(
                                     offlineCacheEnabled = it
                                     onSettingsSave(
                                         pushNotificationsEnabled,
-                                        biometricEnabled,
                                         twoFactorEnabled,
                                         it,
                                         settings?.language ?: "en"

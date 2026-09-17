@@ -524,39 +524,6 @@ fun AuthScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Instant Demo Access Button
-                OutlinedButton(
-                    onClick = {
-                        focusManager.clearFocus()
-                        viewModel.signInAsGuest(context)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("instant_guest_button"),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        Icons.Outlined.Bolt,
-                        contentDescription = null,
-                        tint = BotBubbleGreen,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Instant Demo Access",
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Toggle between Login and Signup at bottom
@@ -618,13 +585,10 @@ fun AuthScreen(
             shape = RoundedCornerShape(20.dp),
             confirmButton = {
                 Button(
-                    onClick = {
-                        viewModel.clearError()
-                        viewModel.signInAsGuest(context)
-                    },
+                    onClick = { viewModel.clearError() },
                     colors = ButtonDefaults.buttonColors(containerColor = BotBubbleGreen)
                 ) {
-                    Text("Instant Demo Access", color = BrandPurpleDark, fontWeight = FontWeight.Bold)
+                    Text("Use Email Instead", color = BrandPurpleDark, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

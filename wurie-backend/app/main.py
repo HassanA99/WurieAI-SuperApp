@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, Depends, HTTPException, Header, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import firebase_admin
 from firebase_admin import auth, credentials
 from app.services.domain_router import DomainRouter
@@ -8,6 +8,7 @@ from app.services.service_contracts import AgentResponse, CommentItem, LikeState
 from app.services.service_contracts import ProfileSettings, UserProfile
 from app.services.auth import initialize_firebase_admin, verify_firebase_token
 from app.services.firestore_service_adapters import FirestoreServiceAdapters
+from app.services.market_service import MarketService
 from app.services.profile_service import ProfileService
 from app.services.social_service import SocialService
 from app.services.tracing import trace_chat_flow
@@ -44,6 +45,9 @@ class ChatResponse(BaseModel):
     text: str
     action: str | None = None
     target: str | None = None
+    data: dict = Field(default_factory=dict)
+    service: str | None = None
+    workflow_id: str | None = None
 
 class MarketPriceRequest(BaseModel):
     commodity: str
@@ -117,14 +121,28 @@ async def chat_endpoint(request: ChatRequest, user=Depends(firebase_dependency))
     """
     Main endpoint for the Android app.
 
-    Keeps the existing Android response shape while routing through the
-    structured domain service router. In production, this should be backed
-    by Firestore and service adapters, while the LangGraph orchestrator can
-    sit behind or complement this routing layer.
+    Uses the LangGraph orchestrator when its model dependencies are configured,
+    while retaining the deterministic domain router for local development and
+    controlled fallback behavior.
     """
     try:
-        # Prefer the structured domain router for service-aware, business-safe flows.
-        # Fall back to the LangGraph orchestrator if needed in production.
+        from app.agents.orchestrator import run_orchestrator
+
+        result = run_orchestrator(request.message, user.get("uid", "unknown"))
+        if not result.get("text") or result["text"].startswith("LangGraph Error:"):
+            raise RuntimeError("LangGraph did not return a usable response")
+
+        return ChatResponse(
+            text=result["text"],
+            action=result.get("action"),
+            target=result.get("target"),
+            data=result.get("data", {}),
+            service=result.get("service"),
+            workflow_id=result.get("workflow_id"),
+        )
+    except Exception:
+        # Keep local development and service continuity independent of model
+        # credentials or optional LangGraph dependencies.
         result = router.route(request.message)
 
         if isinstance(result, AgentResponse):
@@ -132,16 +150,19 @@ async def chat_endpoint(request: ChatRequest, user=Depends(firebase_dependency))
                 text=result.text,
                 action=result.action,
                 target=result.target,
+                data=result.data,
+                service=result.service.value,
+                workflow_id=result.workflow_id,
             )
 
-        # Maintain compatibility with the old orchestrator result shape.
         return ChatResponse(
             text=result.get("text", "I'm sorry, I couldn't process that."),
             action=result.get("action"),
-            target=result.get("target")
+            target=result.get("target"),
+            data=result.get("data", {}),
+            service=result.get("service"),
+            workflow_id=result.get("workflow_id"),
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 def health_check():

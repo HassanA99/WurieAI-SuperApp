@@ -82,7 +82,6 @@ class ProfileViewModel(
 
     fun saveSettings(
         notificationsEnabled: Boolean? = null,
-        biometricEnabled: Boolean? = null,
         pushEnabled: Boolean? = null,
         offlineCacheEnabled: Boolean? = null,
         language: String? = null
@@ -93,7 +92,6 @@ class ProfileViewModel(
                 val token = authTokenProvider.bearerToken()
                 val request = ProfileSettingsUpdateRequest(
                     notificationsEnabled = notificationsEnabled,
-                    biometricEnabled = biometricEnabled,
                     pushEnabled = pushEnabled,
                     offlineCacheEnabled = offlineCacheEnabled,
                     language = language

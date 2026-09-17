@@ -76,7 +76,7 @@ fun ProfileScreen(
     profileUiState: ProfileUiState = ProfileUiState(),
     bookingHistory: List<BookingHistoryItem> = emptyList(),
     onProfileSave: (String, String?, String?) -> Unit = { _, _, _ -> },
-    onSettingsSave: (Boolean?, Boolean?, Boolean?, Boolean?, String?) -> Unit = { _, _, _, _, _ -> },
+    onSettingsSave: (Boolean?, Boolean?, Boolean?, String?) -> Unit = { _, _, _, _ -> },
     onLogout: () -> Unit
 ) {
     val strings = LocalAppStrings.current

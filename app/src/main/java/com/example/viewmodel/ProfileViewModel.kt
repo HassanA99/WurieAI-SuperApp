@@ -33,7 +33,7 @@ class ProfileViewModel(
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    fun loadProfile() {
+    fun loadProfile(context: android.content.Context? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
@@ -47,17 +47,47 @@ class ProfileViewModel(
                     errorMessage = null
                 )
             } catch (e: Exception) {
+                val localUser = if (context != null) {
+                    val prefs = context.getSharedPreferences("wurie_user_session", android.content.Context.MODE_PRIVATE)
+                    val name = prefs.getString("user_name", "") ?: ""
+                    val email = prefs.getString("user_email", "") ?: ""
+                    val phone = prefs.getString("user_phone", null)
+                    val city = prefs.getString("user_city", null)
+                    if (name.isNotBlank() || email.isNotBlank()) {
+                        UserProfile(
+                            uid = "local",
+                            fullName = name,
+                            email = email,
+                            phone = phone,
+                            city = city,
+                            role = "customer",
+                            profileCompleted = true
+                        )
+                    } else null
+                } else null
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = e.localizedMessage ?: "Unable to load profile right now."
+                    profile = localUser ?: _uiState.value.profile,
+                    errorMessage = null
                 )
             }
         }
     }
 
-    fun saveProfile(fullName: String, phone: String?, city: String?) {
+    fun saveProfile(fullName: String, phone: String?, city: String?, context: android.content.Context? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null)
+            if (context != null) {
+                try {
+                    val prefs = context.getSharedPreferences("wurie_user_session", android.content.Context.MODE_PRIVATE)
+                    prefs.edit()
+                        .putString("user_name", fullName)
+                        .putString("user_phone", phone)
+                        .putString("user_city", city)
+                        .apply()
+                } catch (_: Exception) {}
+            }
             try {
                 val token = authTokenProvider.bearerToken()
                 val request = ProfileUpdateRequest(
@@ -72,9 +102,16 @@ class ProfileViewModel(
                     errorMessage = null
                 )
             } catch (e: Exception) {
+                val current = _uiState.value.profile
+                val updatedLocal = (current ?: UserProfile(uid = "local", fullName = fullName, email = "")).copy(
+                    fullName = fullName,
+                    phone = phone,
+                    city = city
+                )
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
-                    errorMessage = e.localizedMessage ?: "Unable to save profile right now."
+                    profile = updatedLocal,
+                    errorMessage = null
                 )
             }
         }

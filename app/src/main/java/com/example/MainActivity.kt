@@ -58,6 +58,14 @@ class MainActivity : FragmentActivity() {
                 val authViewModel: AuthViewModel = viewModel()
                 val authState by authViewModel.authState.collectAsState()
 
+                LaunchedEffect(authState) {
+                    if (authState is AuthState.Idle) {
+                        navController.navigate("auth") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                }
+
                 NavHost(
                     navController = navController, 
                     startDestination = if (authState is AuthState.Success) "main" else "onboarding"
@@ -126,6 +134,7 @@ sealed class NavItem(val title: String, val icon: ImageVector?) {
 fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
     var currentLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
     val authViewModel: AuthViewModel = viewModel()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     ProvideAppLanguage(language = currentLanguage) {
         val strings = LocalAppStrings.current
@@ -363,9 +372,14 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                             val profileUiState by profileViewModel.uiState.collectAsState()
                             val serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
                             val bookingHistory by serviceViewModel.bookingHistory.collectAsState()
+                            val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory)
+                            val messages by chatViewModel.messages.collectAsState()
+
+                            val aiTasksCount = messages.count { it.isUser }
+                            val points = (bookingHistory.size * 50) + (aiTasksCount * 10)
 
                             LaunchedEffect(Unit) {
-                                profileViewModel.loadProfile()
+                                profileViewModel.loadProfile(context)
                                 serviceViewModel.loadBookings()
                             }
 
@@ -376,8 +390,10 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                                 onLanguageChange = { currentLanguage = it },
                                 profileUiState = profileUiState,
                                 bookingHistory = bookingHistory,
+                                aiTasksCount = aiTasksCount,
+                                points = points,
                                 onProfileSave = { name, phone, city ->
-                                    profileViewModel.saveProfile(name, phone, city)
+                                    profileViewModel.saveProfile(name, phone, city, context)
                                 },
                                 onSettingsSave = { notifications, push, offline, language ->
                                     profileViewModel.saveSettings(
@@ -387,7 +403,7 @@ fun WurieSuperApp(onVoiceModeOpen: () -> Unit) {
                                         language = language
                                     )
                                 },
-                                onLogout = { authViewModel.signOut() }
+                                onLogout = { authViewModel.signOut(context) }
                             )
                         }
                         else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

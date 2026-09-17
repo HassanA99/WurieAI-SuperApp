@@ -44,6 +44,18 @@ class ChatViewModel(
         }
     }
 
+    private suspend fun updateLoadingMessage(id: String, newText: String, isError: Boolean = false) {
+        val updatedMsg = ChatMessageEntity(
+            id = id,
+            text = newText,
+            isUser = false,
+            isLoading = false,
+            isError = isError,
+            timestamp = System.currentTimeMillis()
+        )
+        repository.insertMessage(updatedMsg)
+    }
+
     fun sendMessage(text: String, base64Image: String? = null) {
         if (text.isBlank() && base64Image == null) return
 
@@ -61,12 +73,12 @@ class ChatViewModel(
                     backendToken
                 )
 
-                if (response != null) {
-                    val backendText = response.text.ifBlank { "I’m here to help you with WurieAI." }
+                val responseText = response?.getDisplayText()
+                if (response != null && !responseText.isNullOrBlank()) {
                     val actionText = response.action
                     val targetText = response.target
                     val messageText = buildString {
-                        append(backendText)
+                        append(responseText)
                         if (!actionText.isNullOrBlank() && !targetText.isNullOrBlank()) {
                             append(" [${actionText}:$targetText]")
                         }
@@ -84,35 +96,22 @@ class ChatViewModel(
                             )
                         )
                     }
-                    return@launch
+                } else {
+                    updateLoadingMessage(
+                        loadingId,
+                        "Backend returned an empty response.",
+                        isError = true
+                    )
                 }
-
-                // If the backend client is not configured, we stay in a deterministic demo flow.
-                kotlinx.coroutines.delay(500)
-                val demoResponse = when {
-                    text.contains("price", ignoreCase = true) -> "Opening Market Prices... [NAVIGATE_TO:Market Prices]"
-                    text.contains("hire", ignoreCase = true) || text.contains("artisan", ignoreCase = true) || text.contains("provider", ignoreCase = true) -> "Let's find you a professional. [NAVIGATE_TO:Hire Provider]"
-                    text.contains("wallet", ignoreCase = true) || text.contains("balance", ignoreCase = true) -> "Opening your digital wallet... [NAVIGATE_TO:Wallet]"
-                    else -> "I am WurieAI, your local commerce and service assistant. How can I help you today?"
-                }
-                updateLoadingMessage(loadingId, demoResponse)
             } catch (e: Exception) {
                 e.printStackTrace()
-                val demoResponse = when {
-                    text.contains("price", ignoreCase = true) -> "Opening Market Prices... [NAVIGATE_TO:Market Prices]"
-                    text.contains("hire", ignoreCase = true) || text.contains("artisan", ignoreCase = true) || text.contains("provider", ignoreCase = true) -> "Let's find you a professional. [NAVIGATE_TO:Hire Provider]"
-                    text.contains("wallet", ignoreCase = true) || text.contains("balance", ignoreCase = true) -> "Opening your digital wallet... [NAVIGATE_TO:Wallet]"
-                    else -> "I am WurieAI, your local commerce and service assistant. How can I help you today?"
-                }
-                updateLoadingMessage(loadingId, demoResponse)
+                val errMessage = e.localizedMessage ?: "Network/Server Connection Error"
+                updateLoadingMessage(
+                    loadingId,
+                    "Error connecting to backend: $errMessage",
+                    isError = true
+                )
             }
-        }
-    }
-    
-    private suspend fun updateLoadingMessage(id: String, newText: String, isError: Boolean = false) {
-        val messageToUpdate = messages.value.find { it.id == id }
-        if (messageToUpdate != null) {
-            repository.updateMessage(messageToUpdate.copy(text = newText, isLoading = false, isError = isError))
         }
     }
     

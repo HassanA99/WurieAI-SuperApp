@@ -29,10 +29,7 @@ data class PendingProvider(val id: String, val name: String, val category: Strin
 @Composable
 fun AdminDashboardScreen(
     onBack: () -> Unit,
-    pendingProviders: List<PendingProvider> = listOf(
-        PendingProvider("1", "Abu Koroma", "Mechanic", "Pending"),
-        PendingProvider("2", "Fatu Turay", "Plumber", "Pending")
-    ),
+    pendingProviders: List<PendingProvider> = emptyList(),
     onApprove: (String) -> Unit = {},
     onReject: (String) -> Unit = {}
 ) {

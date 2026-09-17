@@ -13,8 +13,18 @@ from app.services.profile_service import ProfileService
 from app.services.social_service import SocialService
 from app.services.tracing import trace_chat_flow
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # Initialize FastAPI
 app = FastAPI(title="WurieAI Backend", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 router = DomainRouter()
 adapters = FirestoreServiceAdapters()
 profile_service = ProfileService()
@@ -115,6 +125,8 @@ def require_admin_role(user: dict) -> None:
     if role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Admin access required")
 
+@app.post("/chat", response_model=ChatResponse)
+@app.post("/api/chat", response_model=ChatResponse)
 @app.post("/api/v1/chat", response_model=ChatResponse)
 @trace_chat_flow
 async def chat_endpoint(request: ChatRequest, user=Depends(firebase_dependency)):

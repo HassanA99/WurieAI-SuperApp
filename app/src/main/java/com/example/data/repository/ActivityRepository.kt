@@ -24,11 +24,15 @@ class ActivityRepository(private val activityLogDao: ActivityLogDao) {
 
     private fun syncToCloud(log: ActivityLogEntity) {
         val uid = auth.currentUser?.uid ?: return
-        firestore.collection("users").document(uid).collection("activity").document(log.id)
-            .set(log)
-            .addOnFailureListener { e ->
-                Log.e("ActivityRepository", "Failed to sync log to cloud", e)
-            }
+        try {
+            firestore.collection("users").document(uid).collection("activity").document(log.id)
+                .set(log)
+                .addOnFailureListener { e ->
+                    Log.w("ActivityRepository", "Cloud activity log sync skipped (${e.message ?: "permission denied"}). Using local storage.")
+                }
+        } catch (e: Exception) {
+            Log.w("ActivityRepository", "Cloud activity log sync exception: ${e.message}")
+        }
     }
 
     suspend fun restoreFromCloud() {
@@ -38,7 +42,7 @@ class ActivityRepository(private val activityLogDao: ActivityLogDao) {
             val logs = snapshot.toObjects(ActivityLogEntity::class.java)
             logs.forEach { activityLogDao.insertLog(it) }
         } catch (e: Exception) {
-            Log.e("ActivityRepository", "Failed to restore logs from cloud", e)
+            Log.w("ActivityRepository", "Cloud activity logs restore skipped: ${e.message}")
         }
     }
 }

@@ -14,13 +14,28 @@ data class ChatRequest(
 )
 
 data class ChatResponse(
-    val text: String,
+    val text: String? = null,
+    val response: String? = null,
+    val message: String? = null,
+    val reply: String? = null,
+    val content: String? = null,
+    val output: String? = null,
     val action: String? = null,
     val target: String? = null,
     val data: Map<String, Any> = emptyMap(),
     val service: String? = null,
     @Json(name = "workflow_id") val workflowId: String? = null
-)
+) {
+    fun getDisplayText(): String {
+        return text?.takeIf { it.isNotBlank() }
+            ?: response?.takeIf { it.isNotBlank() }
+            ?: message?.takeIf { it.isNotBlank() }
+            ?: reply?.takeIf { it.isNotBlank() }
+            ?: content?.takeIf { it.isNotBlank() }
+            ?: output?.takeIf { it.isNotBlank() }
+            ?: ""
+    }
+}
 
 data class ProviderRegistrationRequest(
     val name: String,
@@ -156,6 +171,18 @@ data class ProviderApprovalRequest(
 interface WurieApiService {
     @POST("/api/v1/chat")
     suspend fun sendChatMessage(
+        @Header("Authorization") token: String,
+        @Body request: ChatRequest
+    ): ChatResponse
+
+    @POST("/chat")
+    suspend fun sendChatMessageRoot(
+        @Header("Authorization") token: String,
+        @Body request: ChatRequest
+    ): ChatResponse
+
+    @POST("/api/chat")
+    suspend fun sendChatMessageApi(
         @Header("Authorization") token: String,
         @Body request: ChatRequest
     ): ChatResponse

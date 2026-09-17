@@ -75,6 +75,8 @@ fun ProfileScreen(
     onAdminPortal: () -> Unit = {},
     profileUiState: ProfileUiState = ProfileUiState(),
     bookingHistory: List<BookingHistoryItem> = emptyList(),
+    aiTasksCount: Int = 0,
+    points: Int = 0,
     onProfileSave: (String, String?, String?) -> Unit = { _, _, _ -> },
     onSettingsSave: (Boolean?, Boolean?, Boolean?, String?) -> Unit = { _, _, _, _ -> },
     onLogout: () -> Unit
@@ -86,10 +88,25 @@ fun ProfileScreen(
     val profile: UserProfile? = profileUiState.profile
     val settings: ProfileSettings? = profileUiState.settings
 
-    val userName = profile?.fullName ?: prefs.getString("user_name", "Foday Kamara") ?: "Foday Kamara"
-    val userEmail = profile?.email ?: prefs.getString("user_email", "foday.k@wurie.ai") ?: "foday.k@wurie.ai"
-    val userPhone = profile?.phone ?: prefs.getString("user_phone", "+232 78 450 892") ?: "+232 78 450 892"
-    val userCity = profile?.city ?: prefs.getString("user_city", "Freetown, Sierra Leone") ?: "Freetown, Sierra Leone"
+    val firebaseUser = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser }
+
+    val userName = profile?.fullName?.takeIf { it.isNotBlank() }
+        ?: prefs.getString("user_name", null)?.takeIf { it.isNotBlank() }
+        ?: firebaseUser?.displayName?.takeIf { it.isNotBlank() }
+        ?: "Wurie Member"
+
+    val userEmail = profile?.email?.takeIf { it.isNotBlank() }
+        ?: prefs.getString("user_email", null)?.takeIf { it.isNotBlank() }
+        ?: firebaseUser?.email?.takeIf { it.isNotBlank() }
+        ?: ""
+
+    val userPhone = profile?.phone?.takeIf { it.isNotBlank() }
+        ?: prefs.getString("user_phone", null)?.takeIf { it.isNotBlank() }
+        ?: if (!firebaseUser?.phoneNumber.isNullOrBlank()) firebaseUser!!.phoneNumber!! else "No phone added"
+
+    val userCity = profile?.city?.takeIf { it.isNotBlank() }
+        ?: prefs.getString("user_city", null)?.takeIf { it.isNotBlank() }
+        ?: "No location set"
 
     // Dialog states
     var showEditProfileDialog by remember { mutableStateOf(false) }
@@ -130,33 +147,9 @@ fun ProfileScreen(
         )
     }
 
-    var savedPlaces by remember {
-        mutableStateOf(
-            listOf(
-                SavedPlace("1", "Home", "34 Wilkinson Road, Freetown", Icons.Filled.Home),
-                SavedPlace("2", "Office / Shop", "12 Siaka Stevens Street, Central Freetown", Icons.Filled.Business),
-                SavedPlace("3", "Market Stall", "Dove Cut Market, Guard Street", Icons.Filled.Storefront)
-            )
-        )
-    }
-
-    var emergencyContacts by remember {
-        mutableStateOf(
-            listOf(
-                EmergencyContact("1", "Momodu Bah", "Brother", "+232 76 991 223"),
-                EmergencyContact("2", "Aminata Sesay", "Partner", "+232 88 123 456")
-            )
-        )
-    }
-
-    var momoAccounts by remember {
-        mutableStateOf(
-            listOf(
-                MobileMoneyAccount("1", "Orange Money", "+232 78 ••• 892", isPrimary = true),
-                MobileMoneyAccount("2", "Africell Afrimoney", "+232 88 ••• 104", isPrimary = false)
-            )
-        )
-    }
+    var savedPlaces by remember { mutableStateOf<List<SavedPlace>>(emptyList()) }
+    var emergencyContacts by remember { mutableStateOf<List<EmergencyContact>>(emptyList()) }
+    var momoAccounts by remember { mutableStateOf<List<MobileMoneyAccount>>(emptyList()) }
 
     var selectedTab by remember { mutableStateOf(0) }
     val scrollState = rememberScrollState()
@@ -243,7 +236,7 @@ fun ProfileScreen(
                 ) {
                     Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = BotBubbleGreen, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Tier 2: National ID Verified", color = BotBubbleGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Verified Account", color = BotBubbleGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = BotBubbleGreen, modifier = Modifier.size(12.dp))
                 }
@@ -260,13 +253,14 @@ fun ProfileScreen(
                     .padding(vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                ProfileStat(count = "14", label = "AI Tasks")
+                ProfileStat(count = "$aiTasksCount", label = "AI Tasks")
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.1f)))
-                ProfileStat(count = "5", label = "Bookings")
+                ProfileStat(count = "${bookings.size}", label = "Bookings")
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.1f)))
-                ProfileStat(count = "4.9 ★", label = "Rating")
+                ProfileStat(count = if (bookings.isEmpty()) "New" else "5.0 ★", label = "Rating")
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.1f)))
-                ProfileStat(count = "420", label = "WuriePts")
+                val calculatedPoints = if (points > 0) points else (bookings.size * 50 + aiTasksCount * 10)
+                ProfileStat(count = "$calculatedPoints", label = "WuriePts")
             }
         }
 
@@ -844,11 +838,10 @@ fun ProfileScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Your identity has been authenticated against the National Civil Registration Authority (NCRA) database.", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                    Text("Your account has been authenticated and verified for full access to WurieAI local commerce and services.", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("• Identity Document: Sierra Leone National ID Card", color = Color.White, fontSize = 13.sp)
-                    Text("• Verification Number: SL-NIN-9281-XXXX", color = Color.White, fontSize = 13.sp)
-                    Text("• Tier 2 Limit: SLE 25,000.00 / day", color = BotBubbleGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("• Account Status: Active & Verified", color = Color.White, fontSize = 13.sp)
+                    Text("• Account Limit: SLE 25,000.00 / day", color = BotBubbleGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Text("• Escrow Protection: Active on all bookings", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
                 }
             },

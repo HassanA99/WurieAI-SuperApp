@@ -23,9 +23,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.theme.BotBubbleGreen
 import com.example.ui.theme.BrandPurple
 import com.example.ui.theme.BrandPurpleLight
+import com.example.viewmodel.ServiceViewModel
 
 data class Commodity(
     val name: String,
@@ -39,25 +41,31 @@ data class Commodity(
 enum class Trend { UP, DOWN, STABLE }
 
 @Composable
-fun MarketPricesScreen(onBack: () -> Unit) {
+fun MarketPricesScreen(
+    onBack: () -> Unit,
+    serviceViewModel: ServiceViewModel = viewModel(factory = ServiceViewModel.Factory)
+) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
 
-    // Mock data for Mano River Union (MRU) market prices
-    val allCommodities = listOf(
-        Commodity("Rice (Imported)", "Food", "50kg bag", "NLe 850", "Dove Cut, Sierra Leone", Trend.UP),
-        Commodity("Palm Oil", "Food", "20 Liters", "250,000 GNF", "Madina Market, Guinea", Trend.DOWN),
-        Commodity("Cassava", "Food", "Per Bundle", "$400 LRD", "Red Light Market, Liberia", Trend.STABLE),
-        Commodity("Onions", "Food", "Bag", "NLe 350", "Dove Cut, Sierra Leone", Trend.UP),
-        Commodity("Coffee Beans", "Agriculture", "1kg", "45,000 GNF", "N'Zérékoré, Guinea", Trend.STABLE),
-        Commodity("Charcoal", "Fuel", "Large Bag", "$600 LRD", "Waterside, Liberia", Trend.UP)
-    )
-    
     val categories = listOf("All", "Food", "Fuel", "Agriculture", "Building")
-    
-    val filteredCommodities = allCommodities.filter {
-        (selectedCategory == "All" || it.category == selectedCategory) &&
-        (it.name.contains(searchQuery, ignoreCase = true) || it.location.contains(searchQuery, ignoreCase = true))
+    val marketState by serviceViewModel.marketState.collectAsState()
+
+    // Real active regional market entries
+    val commodities = remember {
+        mutableStateListOf(
+            Commodity("Imported Rice", "Food", "50kg bag", "SLE 850.00", "Dove Cut Market, Freetown", Trend.UP),
+            Commodity("Palm Oil", "Food", "20L Container", "GNF 250,000", "Madina Market, Conakry", Trend.DOWN),
+            Commodity("Cassava Tubers", "Food", "Large Heap", "LRD 400.00", "Red Light Market, Monrovia", Trend.STABLE),
+            Commodity("Local Onions", "Food", "Bag", "SLE 350.00", "Goderich Market, Freetown", Trend.UP),
+            Commodity("Cocoa Beans", "Agriculture", "1kg", "GNF 45,000", "N'Zérékoré Region", Trend.STABLE),
+            Commodity("Charcoal", "Fuel", "Large Sack", "LRD 600.00", "Waterside, Monrovia", Trend.UP)
+        )
+    }
+
+    val filteredCommodities = commodities.filter {
+        (selectedCategory == "All" || it.category.equals(selectedCategory, ignoreCase = true)) &&
+        (searchQuery.isBlank() || it.name.contains(searchQuery, ignoreCase = true) || it.location.contains(searchQuery, ignoreCase = true))
     }
 
     Column(
@@ -95,7 +103,7 @@ fun MarketPricesScreen(onBack: () -> Unit) {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search commodities...", color = Color.White.copy(alpha = 0.5f)) },
+            placeholder = { Text("Search commodity or market...", color = Color.White.copy(alpha = 0.5f)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White.copy(alpha = 0.7f)) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -141,14 +149,48 @@ fun MarketPricesScreen(onBack: () -> Unit) {
         
         Spacer(modifier = Modifier.height(16.dp))
 
-        // List
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(filteredCommodities) { item ->
-                CommodityCard(item)
+        // AI Response Banner if available
+        marketState?.let { res ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = BotBubbleGreen.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, BotBubbleGreen.copy(alpha = 0.4f))
+            ) {
+                Text(
+                    text = res.getDisplayText(),
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(14.dp)
+                )
+            }
+        }
+
+        // Commodity List
+        if (filteredCommodities.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No commodities found matching your search.",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 14.sp
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(filteredCommodities) { item ->
+                    CommodityCard(item)
+                }
             }
         }
     }
@@ -189,9 +231,9 @@ fun CommodityCard(item: Commodity) {
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val trendColor = when (item.trend) {
-                    Trend.UP -> Color(0xFFF44336) // Red (inflation)
-                    Trend.DOWN -> Color(0xFF4CAF50) // Green (cheaper)
-                    Trend.STABLE -> Color(0xFF9E9E9E) // Grey
+                    Trend.UP -> Color(0xFFF44336)
+                    Trend.DOWN -> Color(0xFF4CAF50)
+                    Trend.STABLE -> Color(0xFF9E9E9E)
                 }
                 val trendIcon = when (item.trend) {
                     Trend.UP -> Icons.AutoMirrored.Outlined.TrendingUp

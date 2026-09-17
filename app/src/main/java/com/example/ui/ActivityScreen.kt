@@ -35,35 +35,7 @@ fun ActivityScreen(viewModel: ActivityViewModel = viewModel(factory = ActivityVi
     val strings = LocalAppStrings.current
     val dbActivities by viewModel.logs.collectAsState()
 
-    // Combining real DB activities with some mock social activities to demonstrate the unified hub
-    val mockSocialActivities = listOf(
-        ActivityLogEntity(
-            id = "s1",
-            title = "Sarah Jenkins liked your post",
-            description = "\"Just arrived in Bali...\"",
-            timestamp = System.currentTimeMillis() - 1000 * 60 * 5, // 5 mins ago
-            iconName = "favorite",
-            colorHex = 0xFFE91E63.toLong()
-        ),
-        ActivityLogEntity(
-            id = "s2",
-            title = "David Chen commented",
-            description = "\"Have a great trip!\"",
-            timestamp = System.currentTimeMillis() - 1000 * 60 * 30, // 30 mins ago
-            iconName = "comment",
-            colorHex = 0xFF2196F3.toLong()
-        ),
-        ActivityLogEntity(
-            id = "f1",
-            title = "Wallet Top-Up Successful",
-            description = "Added SLE 500.00 via Bank Transfer",
-            timestamp = System.currentTimeMillis() - 1000 * 60 * 60 * 2, // 2 hours ago
-            iconName = "wallet",
-            colorHex = 0xFF4CAF50.toLong()
-        )
-    )
-
-    val activities = (dbActivities + mockSocialActivities).sortedByDescending { it.timestamp }
+    val activities = dbActivities.sortedByDescending { it.timestamp }
 
     Column(
         modifier = Modifier

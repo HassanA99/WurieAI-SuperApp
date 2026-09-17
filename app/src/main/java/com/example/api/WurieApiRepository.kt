@@ -6,7 +6,15 @@ class WurieApiRepository(
     private val apiService: WurieApiService
 ) {
     suspend fun sendChatMessage(request: ChatRequest, token: String): ChatResponse {
-        return apiService.sendChatMessage(token, request)
+        return try {
+            apiService.sendChatMessage(token, request)
+        } catch (e: Exception) {
+            try {
+                apiService.sendChatMessageRoot(token, request)
+            } catch (e2: Exception) {
+                apiService.sendChatMessageApi(token, request)
+            }
+        }
     }
 
     suspend fun registerProvider(request: ProviderRegistrationRequest, token: String): ProviderRegistrationResponse {

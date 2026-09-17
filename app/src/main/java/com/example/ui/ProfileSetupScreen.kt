@@ -37,6 +37,7 @@ fun ProfileSetupScreen(
     var city by remember { mutableStateOf("") }
     
     val authState by viewModel.authState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
@@ -133,7 +134,7 @@ fun ProfileSetupScreen(
                     
                     Button(
                         onClick = {
-                            viewModel.completeProfile(firstName, lastName, phone, city)
+                            viewModel.completeProfile(context, firstName, lastName, phone, city)
                         },
                         modifier = Modifier
                             .fillMaxWidth()

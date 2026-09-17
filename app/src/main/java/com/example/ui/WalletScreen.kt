@@ -1,152 +1,163 @@
 package com.example.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.WalletBalanceResponse
+import com.example.ui.theme.BotBubbleGreen
 import com.example.ui.theme.BrandPurple
 import com.example.ui.theme.BrandPurpleAccent
-import com.example.ui.theme.BrandPurpleLight
-import com.example.ui.util.LocalAppStrings
+import com.example.ui.theme.BrandPurpleDark
 
 @Composable
 fun WalletScreen(walletState: WalletBalanceResponse? = null) {
-    val strings = LocalAppStrings.current
-    val balance = walletState?.balance ?: 0.0
-    val currency = walletState?.currency ?: "USD"
-    val formattedBalance = "${currency} ${String.format("%,.2f", balance)}"
-    val transactions = walletState?.transactions ?: emptyList()
+    var notified by remember { mutableStateOf(false) }
 
-    LazyColumn(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp)
+            .background(BrandPurple)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
     ) {
-        item {
-            // Header
-            Text(
-                text = "Wallet",
-                color = Color.White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-        }
-        
-        item {
-            // Balance Card
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Icon Container
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(BrandPurpleAccent)
-                    .padding(24.dp)
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .background(BrandPurpleAccent.copy(alpha = 0.2f))
+                    .border(2.dp, BrandPurpleAccent.copy(alpha = 0.5f), CircleShape),
+                contentAlignment = Alignment.Center
             ) {
-                Column {
-                    Text(
-                        text = "Total Balance",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = formattedBalance,
-                        color = Color.White,
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        WalletAction(icon = Icons.Filled.Add, label = "Top Up")
-                        WalletAction(icon = Icons.Filled.ArrowUpward, label = "Send")
-                        WalletAction(icon = Icons.Filled.ArrowDownward, label = "Receive")
-                        WalletAction(icon = Icons.Filled.SwapHoriz, label = "Swap")
-                    }
-                }
-            }
-        }
-        
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
-            AgenticInsightCard()
-        }
-        
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
-            ExchangeRateCard()
-        }
-        
-        item {
-            Spacer(modifier = Modifier.height(32.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Recent Transactions",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "See All",
-                    color = BrandPurpleAccent,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { }
+                Icon(
+                    imageVector = Icons.Outlined.AccountBalanceWallet,
+                    contentDescription = "WuriePay",
+                    tint = BrandPurpleAccent,
+                    modifier = Modifier.size(48.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Coming Soon Badge
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = BotBubbleGreen.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, BotBubbleGreen.copy(alpha = 0.4f))
+            ) {
+                Text(
+                    text = "COMING SOON",
+                    color = BotBubbleGreen,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
-        }
-        
-        if (transactions.isEmpty()) {
-            item {
-                Text(
-                    text = "No recent transactions yet.",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            }
-        } else {
-            transactions.forEach { tx ->
-                val transactionType = tx["type"] as? String ?: "payment"
-                val amountValue = tx["amount"] as? Number ?: 0
-                val amountLabel = "${if (transactionType == "credit") "+" else "-"}${currency} ${String.format("%,.2f", amountValue.toDouble())}"
-                val description = tx["description"] as? String ?: transactionType.replaceFirstChar { it.uppercase() }
-                val timestamp = tx["timestamp"] as? String ?: "Recent"
 
-                item {
-                    TransactionItem(
-                        title = description,
-                        amount = amountLabel,
-                        date = timestamp,
-                        isPositive = transactionType == "credit"
+            // Title
+            Text(
+                text = "WuriePay",
+                color = Color.White,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Subtitle Description
+            Text(
+                text = "Instant digital wallet, local currency top-ups, and secure escrow payments across Sierra Leone & the MRU region.",
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 22.sp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Feature Highlights Card
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = BrandPurpleDark.copy(alpha = 0.6f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    FeatureRow(
+                        title = "Zero-Fee Local Payments",
+                        description = "Direct mobile money and bank transfers with instant settlement."
+                    )
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    FeatureRow(
+                        title = "Smart Escrow Protection",
+                        description = "Funds are released only when service completion is verified."
+                    )
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    FeatureRow(
+                        title = "Multi-Currency MRU Wallet",
+                        description = "Seamless exchange between SLE, GNF, LRD, and USD."
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Get Notified Button
+            Button(
+                onClick = { notified = !notified },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (notified) BotBubbleGreen else BrandPurpleAccent
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = if (notified) Icons.Outlined.Lock else Icons.Outlined.Notifications,
+                        contentDescription = null,
+                        tint = if (notified) BrandPurple else Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (notified) "Notification Set!" else "Notify Me at Launch",
+                        color = if (notified) BrandPurple else Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -155,141 +166,19 @@ fun WalletScreen(walletState: WalletBalanceResponse? = null) {
 }
 
 @Composable
-fun WalletAction(icon: ImageVector, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.2f))
-                .clickable { },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = label, tint = Color.White)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-fun TransactionItem(title: String, amount: String, date: String, isPositive: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(BrandPurpleLight)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(if (isPositive) Color(0xFF4CAF50).copy(alpha = 0.2f) else Color(0xFFE91E63).copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                if (isPositive) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                contentDescription = null,
-                tint = if (isPositive) Color(0xFF4CAF50) else Color(0xFFE91E63)
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(16.dp))
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(date, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
-        }
-        
+private fun FeatureRow(title: String, description: String) {
+    Column {
         Text(
-            text = amount,
-            color = if (isPositive) Color(0xFF4CAF50) else Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-fun AgenticInsightCard() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(BrandPurpleLight.copy(alpha = 0.5f))
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Filled.AutoAwesome,
-                contentDescription = "AI Insight",
-                tint = Color(0xFFFFC107),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "WurieAI Insight",
-                color = Color(0xFFFFC107),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "You've spent SLE 165.00 on Artisan services this week. Consider comparing rates in the Hire section to maximize your savings on your next booking.",
-            color = Color.White.copy(alpha = 0.85f),
-            fontSize = 14.sp,
-            lineHeight = 20.sp
-        )
-    }
-}
-
-@Composable
-fun ExchangeRateCard() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(BrandPurpleLight.copy(alpha = 0.3f))
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Live Exchange Rates",
+            text = title,
             color = Color.White,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            ExchangeRateItem(currency = "USD", rate = "22.50")
-            ExchangeRateItem(currency = "EUR", rate = "24.30")
-            ExchangeRateItem(currency = "GBP", rate = "28.10")
-        }
-    }
-}
-
-@Composable
-fun ExchangeRateItem(currency: String, rate: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = currency, 
-            color = Color.White.copy(alpha = 0.6f), 
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = rate, 
-            color = Color.White, 
-            fontSize = 16.sp, 
-            fontWeight = FontWeight.Bold
+            text = description,
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 13.sp
         )
     }
 }

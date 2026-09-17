@@ -1,34 +1,16 @@
 package com.example.viewmodel
 
-import android.app.Activity
 import android.content.Context
 import android.util.Log
 import android.util.Patterns
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetCredentialResponse
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialException
-import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.BuildConfig
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
-import com.google.firebase.auth.FirebaseAuthInvalidUserException
-import com.google.firebase.auth.FirebaseAuthUserCollisionException
-import com.google.firebase.auth.FirebaseAuthWeakPasswordException
-import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.userProfileChangeRequest
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.data.repository.AuthRepository
+import com.example.data.repository.AuthRepositoryResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 sealed class AuthState {
     object Idle : AuthState()
@@ -39,16 +21,12 @@ sealed class AuthState {
     data class CredentialNotice(val title: String, val message: String) : AuthState()
 }
 
-class AuthViewModel : ViewModel() {
-    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
-    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
-    
+class AuthViewModel(
+    private val authRepository: AuthRepository = AuthRepository()
+) : ViewModel() {
+
     private val _authState = MutableStateFlow<AuthState>(
-        try {
-            if (FirebaseAuth.getInstance().currentUser != null) AuthState.Success else AuthState.Idle
-        } catch (e: Exception) {
-            AuthState.Idle
-        }
+        if (authRepository.currentUser != null) AuthState.Success else AuthState.Idle
     )
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
@@ -81,38 +59,20 @@ class AuthViewModel : ViewModel() {
 
         _authState.value = AuthState.Loading
         viewModelScope.launch {
-            try {
-                val result = auth.createUserWithEmailAndPassword(trimmedEmail, trimmedPassword).await()
-                val user = result.user
-                if (user != null && trimmedName.isNotEmpty()) {
-                    try {
-                        val profileUpdates = userProfileChangeRequest {
-                            displayName = trimmedName
-                        }
-                        user.updateProfile(profileUpdates).await()
-                    } catch (e: Exception) {
-                        Log.w("AuthViewModel", "Failed to update profile name", e)
-                    }
-                    try {
-                        firestore.collection("users").document(user.uid).set(
-                            mapOf(
-                                "displayName" to trimmedName,
-                                "email" to trimmedEmail,
-                                "profileComplete" to false
-                            )
-                        ).await()
-                    } catch (e: Exception) {
-                        Log.w("AuthViewModel", "Failed to create basic Firestore profile", e)
-                    }
+            when (val result = authRepository.signUpWithEmail(trimmedName, trimmedEmail, trimmedPassword)) {
+                is AuthRepositoryResult.Success -> {
+                    saveLocalUser(context, trimmedName, trimmedEmail)
+                    _authState.value = AuthState.NeedProfileSetup
                 }
-                saveLocalUser(context, trimmedName, trimmedEmail)
-                _authState.value = AuthState.NeedProfileSetup
-            } catch (e: FirebaseAuthUserCollisionException) {
-                _authState.value = AuthState.Error("An account with this email already exists. Please sign in instead.")
-            } catch (e: FirebaseAuthWeakPasswordException) {
-                _authState.value = AuthState.Error("Password is too weak. Please use at least 6 characters.")
-            } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "Sign up failed. Please try again.")
+                is AuthRepositoryResult.Error -> {
+                    _authState.value = AuthState.Error(result.message)
+                }
+                is AuthRepositoryResult.Notice -> {
+                    _authState.value = AuthState.CredentialNotice(result.title, result.message)
+                }
+                is AuthRepositoryResult.Cancelled -> {
+                    _authState.value = AuthState.Idle
+                }
             }
         }
     }
@@ -132,16 +92,43 @@ class AuthViewModel : ViewModel() {
 
         _authState.value = AuthState.Loading
         viewModelScope.launch {
-            try {
-                auth.signInWithEmailAndPassword(trimmedEmail, trimmedPassword).await()
-                saveLocalUser(context, auth.currentUser?.displayName ?: "Wurie Explorer", trimmedEmail)
-                checkIfProfileExists()
-            } catch (e: FirebaseAuthInvalidUserException) {
-                _authState.value = AuthState.Error("No account found with this email. Tap 'Create Account' below.")
-            } catch (e: FirebaseAuthInvalidCredentialsException) {
-                _authState.value = AuthState.Error("Incorrect password or email. Please check and try again.")
-            } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "Login failed. Check your connection and try again.")
+            when (val result = authRepository.signInWithEmail(trimmedEmail, trimmedPassword)) {
+                is AuthRepositoryResult.Success -> {
+                    val user = result.data
+                    saveLocalUser(context, user.displayName ?: "Wurie Explorer", trimmedEmail)
+                    checkIfProfileExists()
+                }
+                is AuthRepositoryResult.Error -> {
+                    _authState.value = AuthState.Error(result.message)
+                }
+                is AuthRepositoryResult.Notice -> {
+                    _authState.value = AuthState.CredentialNotice(result.title, result.message)
+                }
+                is AuthRepositoryResult.Cancelled -> {
+                    _authState.value = AuthState.Idle
+                }
+            }
+        }
+    }
+
+    fun signInWithGoogle(context: Context) {
+        _authState.value = AuthState.Loading
+        viewModelScope.launch {
+            when (val result = authRepository.signInWithGoogle(context)) {
+                is AuthRepositoryResult.Success -> {
+                    val user = result.data
+                    saveLocalUser(context, user.displayName ?: "Wurie Explorer", user.email ?: "")
+                    checkIfProfileExists()
+                }
+                is AuthRepositoryResult.Error -> {
+                    _authState.value = AuthState.Error(result.message)
+                }
+                is AuthRepositoryResult.Notice -> {
+                    _authState.value = AuthState.CredentialNotice(result.title, result.message)
+                }
+                is AuthRepositoryResult.Cancelled -> {
+                    _authState.value = AuthState.Idle
+                }
             }
         }
     }
@@ -154,34 +141,46 @@ class AuthViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            try {
-                auth.sendPasswordResetEmail(trimmedEmail).await()
-                onComplete(true, "Password reset instructions sent to $trimmedEmail")
-            } catch (e: Exception) {
-                onComplete(false, e.localizedMessage ?: "Could not send reset email. Check email and try again.")
+            when (val result = authRepository.sendPasswordResetEmail(trimmedEmail)) {
+                is AuthRepositoryResult.Success -> {
+                    onComplete(true, "Password reset instructions sent to $trimmedEmail")
+                }
+                is AuthRepositoryResult.Error -> {
+                    onComplete(false, result.message)
+                }
+                else -> {
+                    onComplete(false, "Password reset request failed. Please try again.")
+                }
             }
         }
     }
 
-    fun completeProfile(firstName: String, lastName: String, phone: String, city: String) {
-        val uid = auth.currentUser?.uid
+    fun completeProfile(context: Context? = null, firstName: String, lastName: String, phone: String, city: String) {
         _authState.value = AuthState.Loading
         viewModelScope.launch {
-            try {
-                if (uid != null) {
-                    val profile = mapOf(
-                        "firstName" to firstName,
-                        "lastName" to lastName,
-                        "phone" to phone,
-                        "city" to city,
-                        "email" to (auth.currentUser?.email ?: ""),
-                        "profileComplete" to true
-                    )
-                    firestore.collection("users").document(uid).set(profile).await()
+            if (context != null) {
+                try {
+                    val fullName = "$firstName $lastName".trim()
+                    val prefs = context.getSharedPreferences("wurie_user_session", Context.MODE_PRIVATE)
+                    prefs.edit()
+                        .putString("user_name", fullName)
+                        .putString("user_phone", phone)
+                        .putString("user_city", city)
+                        .apply()
+                } catch (e: Exception) {
+                    Log.w("AuthViewModel", "Could not save local user profile details", e)
                 }
-                _authState.value = AuthState.Success
-            } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "Could not save your profile. Please try again.")
+            }
+            when (val result = authRepository.completeProfile(firstName, lastName, phone, city)) {
+                is AuthRepositoryResult.Success -> {
+                    _authState.value = AuthState.Success
+                }
+                is AuthRepositoryResult.Error -> {
+                    _authState.value = AuthState.Error(result.message)
+                }
+                else -> {
+                    _authState.value = AuthState.Success
+                }
             }
         }
     }
@@ -191,116 +190,14 @@ class AuthViewModel : ViewModel() {
     }
 
     private suspend fun checkIfProfileExists() {
-        val uid = auth.currentUser?.uid ?: return
-        try {
-            val doc = firestore.collection("users").document(uid).get().await()
-            if (doc.exists()) {
-                _authState.value = AuthState.Success
-            } else {
-                _authState.value = AuthState.NeedProfileSetup
-            }
-        } catch (e: Exception) {
-            _authState.value = AuthState.Error(e.localizedMessage ?: "Could not load your profile. Please try again.")
-        }
-    }
-
-    fun signInWithGoogle(context: Context) {
-        _authState.value = AuthState.Loading
-        viewModelScope.launch {
-            try {
-                val credentialManager = CredentialManager.create(context)
-                val serverClientId = BuildConfig.WEB_CLIENT_ID
-                
-                if (serverClientId.isEmpty() || serverClientId == "MY_WEB_CLIENT_ID") {
-                    _authState.value = AuthState.CredentialNotice(
-                        title = "Google Sign-In Credentials",
-                        message = "Google Cloud Web Client ID is not configured yet. Please sign in with your email instead."
-                    )
-                    return@launch
-                }
-
-                val googleIdOption = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(serverClientId)
-                    .setAutoSelectEnabled(false)
-                    .build()
-
-                val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(googleIdOption)
-                    .build()
-
-                val result = credentialManager.getCredential(
-                    request = request,
-                    context = context as Activity,
-                )
-
-                handleSignInResult(result, context)
-
-            } catch (e: GetCredentialCancellationException) {
-                // User intentionally cancelled the Google picker bottom sheet
-                _authState.value = AuthState.Idle
-            } catch (e: NoCredentialException) {
-                _authState.value = AuthState.CredentialNotice(
-                    title = "No Google Account",
-                        message = "No Google account was found on this device or emulator. Please sign in with email instead."
-                )
-            } catch (e: GetCredentialException) {
-                val msg = e.localizedMessage ?: "Unknown error"
-                Log.w("AuthViewModel", "Google CredentialManager exception: $msg", e)
-                if (msg.contains("10:") || msg.contains("16:") || msg.contains("Developer Error", ignoreCase = true) || msg.contains("Cannot find", ignoreCase = true)) {
-                    _authState.value = AuthState.CredentialNotice(
-                        title = "Google Credentials Setup",
-                        message = "Google Cloud Client ID and SHA-1 certificate configuration are pending in the Firebase Console. Please use Email Sign-In instead."
-                    )
-                } else {
-                    _authState.value = AuthState.CredentialNotice(
-                        title = "Google Sign-In",
-                        message = "Google Sign-In could not complete ($msg). Please use Email Sign-In instead."
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e("AuthViewModel", "Google sign-in error", e)
-                _authState.value = AuthState.CredentialNotice(
-                    title = "Google Sign-In Notice",
-                    message = "Google Sign-In encountered an issue (${e.localizedMessage ?: "configuration mismatch"}). Please sign in with your email instead."
-                )
-            }
-        }
-    }
-
-    private fun handleSignInResult(result: GetCredentialResponse, context: Context) {
-        val credential = result.credential
-        if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-            val authCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-            
-            viewModelScope.launch {
-                try {
-                    val authResult = auth.signInWithCredential(authCredential).await()
-                    val user = authResult.user
-                    saveLocalUser(
-                        context, 
-                        user?.displayName ?: googleIdTokenCredential.displayName ?: "Wurie Explorer", 
-                        user?.email ?: googleIdTokenCredential.id
-                    )
-                    checkIfProfileExists()
-                } catch (e: Exception) {
-                    val msg = e.localizedMessage ?: "Firebase auth failed"
-                    if (msg.contains("DEVELOPER_ERROR", ignoreCase = true) || msg.contains("fingerprint", ignoreCase = true)) {
-                        _authState.value = AuthState.CredentialNotice(
-                            title = "Firebase SHA-1 Notice",
-                            message = "The build SHA-1 fingerprint needs to be added in the Firebase Console. Please use Email Sign-In instead."
-                        )
-                    } else {
-                        _authState.value = AuthState.Error(msg)
-                    }
-                }
-            }
+        val isComplete = authRepository.checkProfileStatus()
+        if (isComplete) {
+            _authState.value = AuthState.Success
         } else {
-            _authState.value = AuthState.Error("Invalid credential type received.")
+            _authState.value = AuthState.NeedProfileSetup
         }
     }
-    
+
     private fun saveLocalUser(context: Context, name: String, email: String) {
         try {
             val prefs = context.getSharedPreferences("wurie_user_session", Context.MODE_PRIVATE)
@@ -314,13 +211,16 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun signOut() {
-        try {
-            auth.signOut()
-        } catch (e: Exception) {
-            Log.w("AuthViewModel", "Sign out error", e)
+    fun signOut(context: Context? = null) {
+        authRepository.signOut()
+        if (context != null) {
+            try {
+                val prefs = context.getSharedPreferences("wurie_user_session", Context.MODE_PRIVATE)
+                prefs.edit().clear().apply()
+            } catch (e: Exception) {
+                Log.w("AuthViewModel", "Could not clear local session", e)
+            }
         }
         _authState.value = AuthState.Idle
     }
 }
-

@@ -1,3 +1,4 @@
+import os
 import json
 from typing import TypedDict, Annotated, Sequence
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -6,6 +7,13 @@ from langgraph.graph import StateGraph, END
 from app.agents.market_agent import check_market_price
 from app.agents.artisan_agent import find_artisan
 from app.services.tracing import trace_agent_flow
+
+def _get_llm(temperature: float = 0.0):
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    try:
+        return ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+    except Exception:
+        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=temperature)
 
 # Define the State for LangGraph
 class AgentState(TypedDict):
@@ -16,7 +24,7 @@ class AgentState(TypedDict):
 
 def get_intent(state: AgentState):
     """Router Node: Determines the user's intent."""
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.0)
+    llm = _get_llm(temperature=0.0)
     messages = state["messages"]
     last_message = messages[-1].content
     
@@ -66,7 +74,7 @@ def wallet_node(state: AgentState):
 
 def general_node(state: AgentState):
     """General Conversation Node"""
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+    llm = _get_llm(temperature=0.7)
     
     sys_prompt = "You are WurieAI, an intelligent agent for the MRU region. Be helpful and concise."
     messages = [HumanMessage(content=sys_prompt)] + list(state["messages"])

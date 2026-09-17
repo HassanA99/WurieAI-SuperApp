@@ -29,23 +29,25 @@ class ChatRepository(private val chatDao: ChatDao) {
         try {
             firestore.collection("users").document(uid).collection("chats").document(id).delete()
         } catch (e: Exception) {
-            Log.e("ChatRepository", "Failed to delete from cloud", e)
+            Log.w("ChatRepository", "Cloud delete message skipped: ${e.message}")
         }
     }
     
     suspend fun clearHistory() {
         chatDao.clearAll()
-        // Note: deleting a collection from Android client is not recommended for large collections, 
-        // but can be implemented individually if needed.
     }
 
     private fun syncToCloud(message: ChatMessageEntity) {
         val uid = auth.currentUser?.uid ?: return
-        firestore.collection("users").document(uid).collection("chats").document(message.id)
-            .set(message)
-            .addOnFailureListener { e ->
-                Log.e("ChatRepository", "Failed to sync message to cloud", e)
-            }
+        try {
+            firestore.collection("users").document(uid).collection("chats").document(message.id)
+                .set(message)
+                .addOnFailureListener { e ->
+                    Log.w("ChatRepository", "Cloud message sync skipped (${e.message ?: "permission denied"}). Using local storage.")
+                }
+        } catch (e: Exception) {
+            Log.w("ChatRepository", "Cloud message sync exception: ${e.message}")
+        }
     }
 
     // Call this upon login to restore messages from cloud
@@ -56,7 +58,7 @@ class ChatRepository(private val chatDao: ChatDao) {
             val messages = snapshot.toObjects(ChatMessageEntity::class.java)
             messages.forEach { chatDao.insertMessage(it) }
         } catch (e: Exception) {
-            Log.e("ChatRepository", "Failed to restore from cloud", e)
+            Log.w("ChatRepository", "Cloud messages restore skipped: ${e.message}")
         }
     }
 }

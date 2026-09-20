@@ -78,6 +78,9 @@ jobs:
         run: python -m app.deployment_check "$PROD_BACKEND_URL"
 
       - name: Guard client trust configuration
+        # `if: always()` because this is an independent security check: a failing
+        # contract check above must not hide whether the rules are still safe.
+        if: always()
         # Firestore rules are security configuration: the Android client writes to
         # Firestore directly, so missing or permissive rules must fail the build.
         run: python tools/check-services.py --offline --only firebase

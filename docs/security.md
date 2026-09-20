@@ -8,7 +8,8 @@ WurieAI must protect identity, provider data, bookings, market data, chat histor
 ### Identity and auth
 - Use Firebase Authentication for all user identity.
 - Require verified Firebase ID tokens for backend access.
-- Support email/password, Google identity, and guest fallback only for demo or limited flows.
+- Support email/password and Google identity. There is **no guest identity**: no token value is accepted without Firebase verification, and unauthenticated requests receive `401`. A local-only development fallback (`WURIE_DEV_AUTH_FALLBACK`) exists for offline work and is refused on any runtime that identifies as production, so it cannot disable authentication by mistake.
+- App Check enforcement is available (`WURIE_APP_CHECK_ENFORCE`) and fails closed once enabled.
 
 ### Mobile app
 - Enable Firebase App Check.
@@ -22,7 +23,7 @@ WurieAI must protect identity, provider data, bookings, market data, chat histor
 - Add request logging and audit events.
 
 ### Data
-- Use Firestore security rules that restrict collections by user role and ownership.
+- Use Firestore security rules that restrict collections by user role and ownership. The rules are versioned in `firestore.rules` (deny-by-default, owner-scoped `users/{uid}`) and deployed with `firebase deploy --only firestore:rules`; CI fails if they are missing or permissive.
 - Providers must be verified before appearing in public discovery listings.
 - Users must only access their own sensitive records.
 - Bookings and payment records must be protected by role-specific rules.

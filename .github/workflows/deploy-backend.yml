@@ -9,6 +9,10 @@ on:
       - "render.yaml"
   workflow_dispatch:
 
+env:
+  # Override with a repository variable if the production URL changes.
+  PROD_BACKEND_URL: ${{ vars.PROD_BACKEND_URL || 'https://wurieai-superapp.onrender.com' }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -18,22 +22,68 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Validate Render deploy hook
+      # The Render service WurieAI-SuperApp (srv-dajfmr7qj5pc73detu40) has autoDeploy
+      # enabled on main, so a push already starts the deployment. Triggering a deploy
+      # hook as well would queue a second deploy of the same commit, so this step only
+      # fires when a hook is explicitly configured. Verified with:
+      #   render services -o json
+      - name: Request a deploy (only when a hook is configured)
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "Missing RENDER_DEPLOY_HOOK_URL secret. Add it in GitHub repository secrets."
-            exit 1
+            echo "No RENDER_DEPLOY_HOOK_URL secret: relying on the service's autoDeploy on push to main."
+            exit 0
           fi
+          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL" -H "Content-Type: application/json" -d '{}'
+          echo "Deploy hook triggered. The verify job checks the running revision."
 
-      - name: Trigger Render deployment
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+  verify:
+    # Fails loudly when the running revision does not match the code just merged:
+    # a stale deploy, a service-name mismatch, or a route that quietly disappeared.
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install backend dependencies
+        working-directory: wurie-backend
+        run: pip install -r requirements.txt
+
+      - name: Wait for the deployment to become reachable
         run: |
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d '{"service":"wurieai-backend","branch":"main"}'
+          for attempt in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$PROD_BACKEND_URL/health" || true)
+            if [ "$code" = "200" ]; then
+              echo "Deployment is reachable (attempt $attempt)."
+              exit 0
+            fi
+            echo "attempt $attempt: /health returned $code, retrying in 15s"
+            sleep 15
+          done
+          echo "Deployment never became reachable at $PROD_BACKEND_URL"
+          exit 1
 
-      - name: Confirm deployment request accepted
-        run: echo "Render deployment hook triggered successfully. Configure the backend secrets in the Render dashboard."
+      - name: Verify the deployed contract matches the code
+        working-directory: wurie-backend
+        run: python -m app.deployment_check "$PROD_BACKEND_URL"
+
+      - name: Guard client trust configuration
+        # Firestore rules are security configuration: the Android client writes to
+        # Firestore directly, so missing or permissive rules must fail the build.
+        run: python tools/check-services.py --offline --only firebase
+
+      - name: Report deployment state
+        if: always()
+        run: |
+          echo "Inspect /health for the live runtime state:"
+          curl -s --max-time 30 "$PROD_BACKEND_URL/health" || true

@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// WurieAI Firestore security rules.
+//
+// Threat model: the Android client talks to Firestore directly for its own user
+// document and chat history (see data/repository/AuthRepository.kt and ChatRepository.kt),
+// while every shared record - providers, bookings, wallets, market data - is written by
+// the backend through the Firebase Admin SDK, which bypasses these rules entirely.
+//
+// So the rules only need to do one thing well: let a signed-in user touch their own
+// documents, and deny everything else. Deny-by-default is what protects the project if a
+// new collection is added later and someone forgets to think about rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // A user's own document and everything beneath it (chats, drafts, preferences).
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+      // Account deletion is a backend operation so it cannot be triggered unilaterally
+      // (it needs to release bookings, provider records and wallet state first).
+      allow delete: if false;
+
+      match /{subcollection=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Shared and operational collections are server-only. Reach them through the API,
+    // which verifies the ID token and applies role checks (see app/services/auth.py).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

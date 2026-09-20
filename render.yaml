@@ -1,30 +1,76 @@
+# Render blueprint for the WurieAI backend.
+#
+# Verified against the live account with the Render CLI (`render services -o json`):
+#   name: WurieAI-SuperApp   id: srv-dajfmr7qj5pc73detu40
+#   runtime: docker          dockerfilePath: wurie-backend/Dockerfile
+#   branch: main             autoDeploy: yes        healthCheckPath: /health
+#   plan: free               region: oregon         url: https://wurieai-superapp.onrender.com
+#
+# The name is case-sensitive and must match, or applying this blueprint would create a
+# second service instead of describing the one that serves the mobile app. The public
+# hostname (`wurieai-superapp.onrender.com`) is the default subdomain and is NOT the
+# service name.
 services:
   - type: web
-    name: wurieai-backend
+    name: WurieAI-SuperApp
     runtime: docker
+    # Free instances spin down and cold-start in ~20s, which the 90s mobile client
+    # timeout hides as "slow". Upgrade before any public launch.
     plan: free
     region: oregon
+    branch: main
     dockerfilePath: ./wurie-backend/Dockerfile
     dockerContext: ./wurie-backend
     healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.12"
+      # Secrets live in the Render dashboard and are never committed. `sync: false`
+      # means "prompt for this value, do not overwrite it from the blueprint".
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      # Non-secret runtime configuration (values currently set on the live service).
+      - key: GOOGLE_CLOUD_PROJECT
+        value: wurieai-app
       - key: LANGSMITH_TRACING
         value: "true"
       - key: LANGSMITH_PROJECT
         value: wurieai-production
       - key: LANGCHAIN_CALLBACKS_BACKGROUND
         value: "false"
+      # Guest/dev auth must stay off in production. The backend also refuses this flag
+      # outright on any runtime that identifies as production.
       - key: WURIE_DEV_AUTH_FALLBACK
         value: "false"
-      - key: PORT
-        value: "10000"
+      # App Check enforcement. Flip to "true" only once the Android and web builds ship
+      # a registered App Check provider, otherwise every client request is rejected.
+      - key: WURIE_APP_CHECK_ENFORCE
+        value: "false"
+      # router = deterministic answer when the agent cannot respond (marked degraded)
+      # error  = HTTP 503 instead of a degraded answer
+      - key: WURIE_AGENT_FALLBACK
+        value: "router"
+      - key: SENTRY_ENVIRONMENT
+        value: production
 
-    # Render dashboard secrets should include:
-    #   GEMINI_API_KEY
-    #   LANGCHAIN_API_KEY
-    #   LANGSMITH_API_KEY
-    #   FIREBASE_SERVICE_ACCOUNT_JSON
-    #   GOOGLE_CLOUD_PROJECT
+# Agent runtime and storage are configured entirely by environment:
+#   GEMINI_API_KEY                 agent runtime; /health reports agent_available
+#   FIREBASE_SERVICE_ACCOUNT_JSON  ID tokens + Firestore; /health reports storage
+#   SENTRY_DSN                     error tracking; /health reports error_tracking
+#
+# Operate it with the CLI (see tools/clis/install.sh, tools/check-services.sh):
+#   render workspace set tea-d4ud5rogjchc73c6p69g
+#   render services -o json
+#   render deploys list srv-dajfmr7qj5pc73detu40
+#   render logs --service srv-dajfmr7qj5pc73detu40
+#   render deploys create srv-dajfmr7qj5pc73detu40 --confirm --wait
+#
+# Verify a deploy with:
+#   cd wurie-backend && uv run python -m app.deployment_check https://wurieai-superapp.onrender.com

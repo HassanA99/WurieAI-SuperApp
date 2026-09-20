@@ -1,12 +1,13 @@
+import logging
 import os
-from fastapi import FastAPI, Depends, HTTPException, Header, Query
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-import firebase_admin
-from firebase_admin import auth, credentials
+
 from app.services.domain_router import DomainRouter
 from app.services.service_contracts import AgentResponse, CommentItem, LikeState, NotificationItem
 from app.services.service_contracts import ProfileSettings, UserProfile
-from app.services.auth import initialize_firebase_admin, verify_firebase_token
+from app.services.auth import auth_health, firebase_admin_ready, initialize_firebase_admin, verify_firebase_token
 from app.services.firestore_service_adapters import FirestoreServiceAdapters
 from app.services.market_service import MarketService
 from app.services.profile_service import ProfileService
@@ -14,6 +15,12 @@ from app.services.social_service import SocialService
 from app.services.tracing import trace_chat_flow
 
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger("wurieai.api")
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 # Initialize FastAPI
 app = FastAPI(title="WurieAI Backend", version="1.0.0")
@@ -31,21 +38,105 @@ profile_service = ProfileService()
 provider_service = adapters.provider_service
 ADMIN_ROLES = {"admin", "staff", "super_admin"}
 
+# --- Agent runtime availability ---------------------------------------------------
+# Imported defensively so the API still boots (and reports why) when the agent
+# dependencies or model credentials are missing. Degradation is never silent: the
+# reason is logged, exposed on /health, and marked on degraded chat responses.
+AGENT_FALLBACK_MODE = os.getenv("WURIE_AGENT_FALLBACK", "router").strip().lower()
+AGENT_IMPORT_ERROR: Exception | None = None
+try:
+    from app.agents.orchestrator import AgentError, agent_status, run_orchestrator
+except Exception as exc:  # pragma: no cover - depends on the installed environment
+    AGENT_IMPORT_ERROR = exc
+    run_orchestrator = None
+    agent_status = None
+    AgentError = RuntimeError  # alias only; unreachable while the import is broken
+    logger.exception("Agent runtime unavailable: orchestrator import failed")
+
+
+def agent_health() -> dict:
+    """Report agent readiness without ever failing the health check."""
+    if run_orchestrator is None:
+        return {
+            "available": False,
+            "reason": f"import_failed: {AGENT_IMPORT_ERROR}",
+            "fallback": AGENT_FALLBACK_MODE,
+        }
+    status = dict(agent_status() if agent_status else {"available": False})
+    status["fallback"] = AGENT_FALLBACK_MODE
+    return status
+
+
+def storage_health() -> dict:
+    """Report where data is actually written and whether Firebase Admin is live.
+
+    Without credentials every write silently lands in per-process memory, so this is
+    the signal that distinguishes a real production deployment from a demo one.
+    """
+    uses_firestore = any(
+        repository.uses_firestore
+        for repository in (adapters.providers, adapters.bookings, adapters.wallets)
+    )
+    return {
+        "firebase_admin": firebase_admin_ready(),
+        "storage": "firestore" if uses_firestore else "memory",
+    }
+
+
+# --- Error tracking --------------------------------------------------------------
+SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+_ERROR_TRACKING_ENABLED = False
+
+
+def _init_error_tracking() -> bool:
+    """Enable error tracking when a DSN is configured; never block boot without one."""
+    global _ERROR_TRACKING_ENABLED
+
+    if not SENTRY_DSN:
+        _ERROR_TRACKING_ENABLED = False
+        logger.warning(
+            "SENTRY_DSN is not configured: unhandled errors will only appear in Render logs"
+        )
+        return False
+
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+
+        environment = os.getenv("SENTRY_ENVIRONMENT", "production")
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment=environment,
+            release=os.getenv("SENTRY_RELEASE") or None,
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            integrations=[StarletteIntegration(), FastApiIntegration()],
+        )
+        _ERROR_TRACKING_ENABLED = True
+        logger.info("Error tracking enabled via Sentry (environment=%s)", environment)
+        return True
+    except Exception:
+        _ERROR_TRACKING_ENABLED = False
+        logger.exception("Sentry initialisation failed; continuing without error tracking")
+        return False
+
 
 def startup() -> None:
-    """Initialize Firebase on backend startup when project credentials are available."""
+    """Initialize Firebase Admin and error tracking, reporting rather than hiding failures."""
     try:
         initialize_firebase_admin()
+        logger.info("Firebase Admin initialized")
     except Exception:
-        # Keep the backend bootable in local/demo mode when Firebase is not configured yet.
-        pass
+        # The API stays bootable without Firebase, but every write then falls back to
+        # in-memory storage, so the failure must be loud and diagnosable.
+        logger.exception(
+            "Firebase Admin initialization failed: storage will use the in-memory fallback"
+        )
+
+    _init_error_tracking()
 
 
 startup()
-
-# Initialize Firebase Admin (Uncomment and configure with your service account key in production)
-# cred = credentials.Certificate("path/to/serviceAccountKey.json")
-# firebase_admin.initialize_app(cred)
 
 class ChatRequest(BaseModel):
     message: str
@@ -115,9 +206,16 @@ class NotificationCreateRequest(BaseModel):
     category: str = "general"
 
 
-async def firebase_dependency(authorization: str | None = Header(default=None)):
-    """Keep the public FastAPI route using the shared token verification policy."""
-    return await verify_firebase_token(authorization)
+async def firebase_dependency(
+    authorization: str | None = Header(default=None),
+    x_firebase_appcheck: str | None = Header(default=None),
+):
+    """Keep the public FastAPI route using the shared token verification policy.
+
+    App Check is verified here rather than per route, so every authenticated endpoint
+    inherits the same trust policy as soon as WURIE_APP_CHECK_ENFORCE is enabled.
+    """
+    return await verify_firebase_token(authorization, x_firebase_appcheck)
 
 
 def require_admin_role(user: dict) -> None:
@@ -130,55 +228,105 @@ def require_admin_role(user: dict) -> None:
 @app.post("/api/v1/chat", response_model=ChatResponse)
 @trace_chat_flow
 async def chat_endpoint(request: ChatRequest, user=Depends(firebase_dependency)):
+    """Main assistant endpoint.
+
+    Prefers the LangGraph agent runtime. When that runtime cannot answer, the request
+    is served by the deterministic domain router and the response is explicitly marked
+    as degraded, so a broken AI path is visible to clients and operators instead of
+    silently changing behaviour.
     """
-    Main endpoint for the Android app.
+    uid = user.get("uid", "unknown")
 
-    Uses the LangGraph orchestrator when its model dependencies are configured,
-    while retaining the deterministic domain router for local development and
-    controlled fallback behavior.
-    """
-    try:
-        from app.agents.orchestrator import run_orchestrator
+    if run_orchestrator is not None:
+        try:
+            result = run_orchestrator(request.message, uid)
+            text = (result.get("text") or "").strip()
+            if not text:
+                raise AgentError("agent returned an empty response")
 
-        result = run_orchestrator(request.message, user.get("uid", "unknown"))
-        if not result.get("text") or result["text"].startswith("LangGraph Error:"):
-            raise RuntimeError("LangGraph did not return a usable response")
-
-        return ChatResponse(
-            text=result["text"],
-            action=result.get("action"),
-            target=result.get("target"),
-            data=result.get("data", {}),
-            service=result.get("service"),
-            workflow_id=result.get("workflow_id"),
-        )
-    except Exception:
-        # Keep local development and service continuity independent of model
-        # credentials or optional LangGraph dependencies.
-        result = router.route(request.message)
-
-        if isinstance(result, AgentResponse):
             return ChatResponse(
-                text=result.text,
-                action=result.action,
-                target=result.target,
-                data=result.data,
-                service=result.service.value,
-                workflow_id=result.workflow_id,
+                text=text,
+                action=result.get("action"),
+                target=result.get("target"),
+                data=result.get("data") or {},
+                service=result.get("service"),
+                workflow_id=result.get("workflow_id"),
             )
+        except AgentError as exc:
+            reason = f"agent_error: {exc}"
+            logger.warning("Agent could not answer user=%s: %s", uid, exc)
+        except Exception as exc:
+            reason = f"agent_exception: {exc}"
+            logger.exception("Unexpected agent failure user=%s", uid)
+    else:
+        reason = f"agent_unavailable: {AGENT_IMPORT_ERROR}"
+        logger.error("Agent runtime was not imported; cannot serve user=%s", uid)
 
+    if AGENT_FALLBACK_MODE == "error":
+        raise HTTPException(status_code=503, detail="Assistant is temporarily unavailable")
+
+    result = router.route(request.message)
+    logger.warning("Degraded response served by domain router user=%s reason=%s", uid, reason)
+
+    if isinstance(result, AgentResponse):
+        data = dict(result.data or {})
+        data["degraded"] = True
+        data["degraded_reason"] = reason
         return ChatResponse(
-            text=result.get("text", "I'm sorry, I couldn't process that."),
-            action=result.get("action"),
-            target=result.get("target"),
-            data=result.get("data", {}),
-            service=result.get("service"),
-            workflow_id=result.get("workflow_id"),
+            text=result.text,
+            action=result.action,
+            target=result.target,
+            data=data,
+            service=result.service.value,
+            workflow_id=result.workflow_id,
         )
+
+    data = dict(result.get("data") or {})
+    data["degraded"] = True
+    data["degraded_reason"] = reason
+    return ChatResponse(
+        text=result.get("text", "I'm sorry, I couldn't process that."),
+        action=result.get("action"),
+        target=result.get("target"),
+        data=data,
+        service=result.get("service"),
+        workflow_id=result.get("workflow_id"),
+    )
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    """Liveness plus runtime readiness, so a broken deployment is visible from outside.
+
+    Kept flat and string-valued on purpose: the Android client declares this response
+    as ``Map<String, String>``, and the platform health check only reads the status
+    code. Structured detail is available on ``/api/v1/runtime/status``.
+    """
+    status = agent_health()
+    storage = storage_health()
+    auth = auth_health()
+    return {
+        "status": "healthy",
+        "agent_available": "true" if status.get("available") else "false",
+        "agent_model": str(status.get("model") or ""),
+        "agent_fallback": str(status.get("fallback") or ""),
+        "agent_reason": str(status.get("reason") or ""),
+        "firebase_admin": "true" if storage["firebase_admin"] else "false",
+        "storage": str(storage["storage"]),
+        "error_tracking": "sentry" if _ERROR_TRACKING_ENABLED else "off",
+        "auth_mode": str(auth["mode"]),
+        "app_check": str(auth["app_check"]),
+    }
+
+
+@app.get("/api/v1/runtime/status")
+def runtime_status_endpoint(user=Depends(firebase_dependency)):
+    """Structured runtime readiness for operators and dashboards."""
+    return {
+        "agent": agent_health(),
+        "storage": storage_health(),
+        "auth": auth_health(),
+        "error_tracking": "sentry" if _ERROR_TRACKING_ENABLED else "off",
+    }
 
 
 @app.get("/api/v1/profile", response_model=UserProfile)

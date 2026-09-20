@@ -1,0 +1,50 @@
+name: Backend Tests
+
+# The backend suite is the regression gate for the agent runtime, the authentication
+# policy, the domain router and the deployment contract. Nothing ran it in CI before,
+# which meant a Python-only pull request could go green (only the Android APK job ran)
+# while the fix it contained was never executed.
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install backend and test dependencies
+        working-directory: wurie-backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Run backend test suite
+        working-directory: wurie-backend
+        run: |
+          set -o pipefail
+          python -m unittest discover -s app -p "test_*.py" -v 2>&1 | tee "$RUNNER_TEMP/unittest.log"
+
+      - name: Fail when tests were skipped instead of run
+        # `app/test_auth_policy.py` skips its HTTP-level cases when `httpx` is missing,
+        # so a missing test dependency would silently shrink coverage instead of
+        # failing. A skip is treated as a build failure.
+        if: always()
+        run: |
+          if grep -qE "skipped=[1-9]" "$RUNNER_TEMP/unittest.log"; then
+            echo "::error::Tests were skipped: a test dependency is missing from requirements-dev.txt."
+            grep -niE "skipped" "$RUNNER_TEMP/unittest.log" || true
+            exit 1
+          fi
+          echo "No tests were skipped."

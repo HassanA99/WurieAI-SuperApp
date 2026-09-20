@@ -22,68 +22,12 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
-# Initialize FastAPI
-app = FastAPI(title="WurieAI Backend", version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-router = DomainRouter()
-adapters = FirestoreServiceAdapters()
-profile_service = ProfileService()
-provider_service = adapters.provider_service
-ADMIN_ROLES = {"admin", "staff", "super_admin"}
-
-# --- Agent runtime availability ---------------------------------------------------
-# Imported defensively so the API still boots (and reports why) when the agent
-# dependencies or model credentials are missing. Degradation is never silent: the
-# reason is logged, exposed on /health, and marked on degraded chat responses.
-AGENT_FALLBACK_MODE = os.getenv("WURIE_AGENT_FALLBACK", "router").strip().lower()
-AGENT_IMPORT_ERROR: Exception | None = None
-try:
-    from app.agents.orchestrator import AgentError, agent_status, run_orchestrator
-except Exception as exc:  # pragma: no cover - depends on the installed environment
-    AGENT_IMPORT_ERROR = exc
-    run_orchestrator = None
-    agent_status = None
-    AgentError = RuntimeError  # alias only; unreachable while the import is broken
-    logger.exception("Agent runtime unavailable: orchestrator import failed")
-
-
-def agent_health() -> dict:
-    """Report agent readiness without ever failing the health check."""
-    if run_orchestrator is None:
-        return {
-            "available": False,
-            "reason": f"import_failed: {AGENT_IMPORT_ERROR}",
-            "fallback": AGENT_FALLBACK_MODE,
-        }
-    status = dict(agent_status() if agent_status else {"available": False})
-    status["fallback"] = AGENT_FALLBACK_MODE
-    return status
-
-
-def storage_health() -> dict:
-    """Report where data is actually written and whether Firebase Admin is live.
-
-    Without credentials every write silently lands in per-process memory, so this is
-    the signal that distinguishes a real production deployment from a demo one.
-    """
-    uses_firestore = any(
-        repository.uses_firestore
-        for repository in (adapters.providers, adapters.bookings, adapters.wallets)
-    )
-    return {
-        "firebase_admin": firebase_admin_ready(),
-        "storage": "firestore" if uses_firestore else "memory",
-    }
-
-
-# --- Error tracking --------------------------------------------------------------
+# --- Runtime bootstrap ------------------------------------------------------------
+# Firebase Admin is initialized here, *before* any service repository is constructed.
+# A repository decides at construction time whether it binds to Firestore or falls back
+# to per-process memory, and that decision is what /health reports as `storage`. Running
+# the bootstrap after the repositories are built leaves production healthy and
+# authenticated while silently discarding every write.
 SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
 _ERROR_TRACKING_ENABLED = False
 
@@ -137,6 +81,75 @@ def startup() -> None:
 
 
 startup()
+
+# Initialize FastAPI
+app = FastAPI(title="WurieAI Backend", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+router = DomainRouter()
+adapters = FirestoreServiceAdapters()
+profile_service = ProfileService()
+provider_service = adapters.provider_service
+
+if firebase_admin_ready() and not adapters.providers.uses_firestore:
+    # Credentials work but the repositories still bound to memory, which means the
+    # bootstrap ran after they were built. Every provider, booking and wallet write
+    # would be lost on restart, so this must be visible in the logs, not just /health.
+    logger.error(
+        "Firebase Admin is ready but repositories are in-memory: writes will not persist"
+    )
+ADMIN_ROLES = {"admin", "staff", "super_admin"}
+
+# --- Agent runtime availability ---------------------------------------------------
+# Imported defensively so the API still boots (and reports why) when the agent
+# dependencies or model credentials are missing. Degradation is never silent: the
+# reason is logged, exposed on /health, and marked on degraded chat responses.
+AGENT_FALLBACK_MODE = os.getenv("WURIE_AGENT_FALLBACK", "router").strip().lower()
+AGENT_IMPORT_ERROR: Exception | None = None
+try:
+    from app.agents.orchestrator import AgentError, agent_status, run_orchestrator
+except Exception as exc:  # pragma: no cover - depends on the installed environment
+    AGENT_IMPORT_ERROR = exc
+    run_orchestrator = None
+    agent_status = None
+    AgentError = RuntimeError  # alias only; unreachable while the import is broken
+    logger.exception("Agent runtime unavailable: orchestrator import failed")
+
+
+def agent_health() -> dict:
+    """Report agent readiness without ever failing the health check."""
+    if run_orchestrator is None:
+        return {
+            "available": False,
+            "reason": f"import_failed: {AGENT_IMPORT_ERROR}",
+            "fallback": AGENT_FALLBACK_MODE,
+        }
+    status = dict(agent_status() if agent_status else {"available": False})
+    status["fallback"] = AGENT_FALLBACK_MODE
+    return status
+
+
+def storage_health() -> dict:
+    """Report where data is actually written and whether Firebase Admin is live.
+
+    Without credentials every write silently lands in per-process memory, so this is
+    the signal that distinguishes a real production deployment from a demo one.
+    """
+    uses_firestore = any(
+        repository.uses_firestore
+        for repository in (adapters.providers, adapters.bookings, adapters.wallets)
+    )
+    return {
+        "firebase_admin": firebase_admin_ready(),
+        "storage": "firestore" if uses_firestore else "memory",
+    }
+
 
 class ChatRequest(BaseModel):
     message: str

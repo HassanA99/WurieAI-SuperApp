@@ -7,6 +7,7 @@ API prefers the agent while marking degraded responses explicitly.
 """
 
 import asyncio
+import importlib
 import os
 import unittest
 from unittest import mock
@@ -130,6 +131,46 @@ class AgentRuntimeTests(unittest.TestCase):
         self.assertIn("fallback", status["agent"])
         self.assertIn(status["storage"]["storage"], {"firestore", "memory"})
         self.assertIn(status["error_tracking"], {"sentry", "off"})
+
+    def test_repositories_bind_to_firestore_when_firebase_admin_is_ready(self):
+        """Bootstrap order regression: repositories must bind to Firestore, not memory.
+
+        `FirestoreServiceAdapters` decides at construction time whether it uses
+        Firestore or the in-memory fallback, so Firebase Admin must already be
+        initialized when it is built. When the bootstrap ran afterwards the API still
+        reported a healthy, authenticated service while every provider, booking and
+        wallet write went to per-process memory and was lost on restart.
+        """
+        import firebase_admin
+
+        sentinel_client = mock.MagicMock()
+
+        def fake_initialize_app(*args, **kwargs):
+            firebase_admin._apps["[DEFAULT]"] = object()
+
+        with mock.patch.dict(os.environ), mock.patch.object(
+            firebase_admin, "_apps", {}
+        ), mock.patch.object(
+            firebase_admin, "initialize_app", fake_initialize_app
+        ), mock.patch(
+            "firebase_admin.firestore.client", return_value=sentinel_client
+        ):
+            for key in (
+                "FIREBASE_SERVICE_ACCOUNT_JSON",
+                "FIREBASE_SERVICE_ACCOUNT_PATH",
+                "GOOGLE_APPLICATION_CREDENTIALS",
+            ):
+                os.environ.pop(key, None)
+
+            importlib.reload(main)
+            self.assertTrue(
+                main.adapters.providers.uses_firestore,
+                "repositories bound to memory: the Firebase bootstrap must run before "
+                "the repositories are constructed",
+            )
+
+        # Restore the module to its real, unpatched state for the other tests.
+        importlib.reload(main)
 
 
 if __name__ == "__main__":

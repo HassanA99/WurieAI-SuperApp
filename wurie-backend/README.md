@@ -89,10 +89,20 @@ logs a warning; `/health` reports `error_tracking = off`.
 ## Test
 
 ```bash
-uv run python -m unittest app.test_domain_router app.test_agent_runtime app.test_deployment_check
+uv run python -m unittest discover -s app -p "test_*.py" -v
 ```
 
-`app.test_agent_runtime` is the regression gate for the agent path: it fails the build if the orchestrator stops importing, if the graph loses a node, or if chat degradation ever becomes silent again.
+Discovery (rather than a fixed module list) matters here: an earlier version of this command
+named three modules and silently left `app.test_auth_policy` out of the run. `.github/workflows/backend-tests.yml`
+runs the same command on every pull request and push to `main`, and fails the build if any test
+*skips*, because `app/test_auth_policy.py` skips its HTTP-level cases when `httpx` is missing.
+Test dependencies live in `requirements-dev.txt`.
+
+The suite gates four things: `app.test_agent_runtime` fails the build if the orchestrator stops
+importing, if the graph loses a node, if chat degradation becomes silent, or if the service
+repositories bind to the in-memory store when Firebase Admin is ready; `app.test_auth_policy`
+pins the authentication policy; `app.test_domain_router` covers the domain contracts; and
+`app.test_deployment_check` covers the drift checker itself.
 
 ## Notes
 

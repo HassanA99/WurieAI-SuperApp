@@ -1,0 +1,9 @@
+# Test and tooling dependencies. Not used by the Docker image; production installs
+# requirements.txt only.
+#
+# httpx is declared explicitly even though langsmith currently pulls it in
+# transitively: `app/test_auth_policy.py` uses `fastapi.testclient` (which needs
+# httpx) and skips its HTTP-level cases when the import fails. Relying on a
+# transitive dependency would let those tests silently stop running.
+-r requirements.txt
+httpx==0.28.1
